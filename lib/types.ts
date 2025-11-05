@@ -51,6 +51,15 @@ export interface Agent {
   last_poll_date?: string;
   tasks_completed: number;
   tasks_in_progress: number;
+  // Extended fields for supervisor orchestration
+  agent_type?: string; // Frontend, Backend, Testing, etc.
+  current_task_id?: string;
+  capabilities?: string[];
+  success_rate?: number; // 0-1 percentage
+  tasks_failed?: number;
+  average_task_time?: number; // milliseconds
+  created_at?: string;
+  health_score?: number; // 0-100
 }
 
 /**
@@ -85,4 +94,44 @@ export interface ApiError {
   error: string;
   message: string;
   status: number;
+}
+
+/**
+ * Supervisor-specific types for orchestration
+ */
+
+export interface Bottleneck {
+  agent_type: string;
+  backlog: number;
+  current_agents: number;
+  utilization: number;
+  recommendation: string;
+  estimated_delay: number; // hours
+}
+
+export interface Alert {
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  type: string;
+  message: string;
+  action: string;
+  timestamp: string;
+  tasks?: string[];
+  bottlenecks?: Bottleneck[];
+  failed_count?: number;
+  total_count?: number;
+}
+
+export interface SystemHealth {
+  total_agents: number;
+  healthy: number;
+  stuck: number;
+  offline: number;
+  health_percentage: number;
+  status: 'healthy' | 'degraded' | 'critical';
+}
+
+export interface AgentWorkload {
+  total: number;
+  in_progress: number;
+  todo: number;
 }
