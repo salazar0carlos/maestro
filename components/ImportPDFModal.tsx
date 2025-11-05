@@ -30,7 +30,7 @@ export default function ImportPDFModal({
 }: ImportPDFModalProps) {
   const [step, setStep] = useState<Step>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [pdfBase64, setPdfBase64] = useState('');
+  const [_pdfBase64, setPdfBase64] = useState('');
   const [parsedProjects, setParsedProjects] = useState<ParsedProject[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');

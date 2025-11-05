@@ -25,6 +25,7 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
   const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const loaded = getProject(params.id);
@@ -62,6 +63,75 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
       deleteTask(taskId);
       setTasks(tasks.filter(t => t.task_id !== taskId));
       setIsTaskDetailOpen(false);
+    }
+  };
+
+  const handleGenerateImprovements = async () => {
+    if (!project) return;
+
+    // Get API key from environment or prompt user
+    const apiKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY || prompt('Enter your Anthropic API key:');
+
+    if (!apiKey) {
+      alert('API key is required to generate improvements');
+      return;
+    }
+
+    setIsAnalyzing(true);
+
+    try {
+      // For demo: analyze the Maestro codebase itself
+      // In production, you'd fetch actual project files
+      const demoFiles = [
+        {
+          path: 'app/projects/[id]/page.tsx',
+          content: `// Sample React component with missing error handling
+async function loadData() {
+  const response = await fetch('/api/data');
+  const data = await response.json();
+  return data;
+}`
+        },
+        {
+          path: 'components/TaskCard.tsx',
+          content: `// Component without loading state
+function TaskCard() {
+  const [tasks, setTasks] = useState([]);
+  useEffect(() => {
+    fetch('/api/tasks').then(r => r.json()).then(setTasks);
+  }, []);
+}`
+        }
+      ];
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: project.project_id,
+          files: demoFiles,
+          anthropicApiKey: apiKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to analyze project');
+      }
+
+      const result = await response.json();
+
+      alert(`Analysis complete! Generated ${result.suggestionsCount} improvement suggestions.\n\nClick OK to view them.`);
+
+      // Redirect to improvements page
+      window.location.href = '/improvements';
+    } catch (error) {
+      console.error('Error generating improvements:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -106,9 +176,18 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
             <h1 className="text-3xl font-bold text-slate-50">{project.name}</h1>
             <p className="text-slate-400 mt-1">{project.description}</p>
           </div>
-          <Button onClick={() => setIsNewTaskOpen(true)} variant="primary">
-            + New Task
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleGenerateImprovements}
+              variant="secondary"
+              disabled={isAnalyzing}
+            >
+              {isAnalyzing ? '🔄 Analyzing...' : '🤖 Generate Improvements'}
+            </Button>
+            <Button onClick={() => setIsNewTaskOpen(true)} variant="primary">
+              + New Task
+            </Button>
+          </div>
         </div>
       </div>
 

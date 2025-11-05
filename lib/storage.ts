@@ -4,12 +4,13 @@
  * Future: Easy migration to PostgreSQL by replacing this file
  */
 
-import { Project, MaestroTask, Agent } from './types';
+import { Project, MaestroTask, Agent, ImprovementSuggestion } from './types';
 
 const STORAGE_KEYS = {
   PROJECTS: 'maestro:projects',
   TASKS: 'maestro:tasks',
   AGENTS: 'maestro:agents',
+  SUGGESTIONS: 'maestro:suggestions',
 };
 
 /**
@@ -299,6 +300,150 @@ export function getAgentStats(agentId: string) {
     todo,
     blocked,
   };
+}
+
+// ============ IMPROVEMENT SUGGESTION STORAGE ============
+
+/**
+ * Get all improvement suggestions
+ */
+export function getSuggestions(): ImprovementSuggestion[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.SUGGESTIONS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get suggestions for a specific project
+ */
+export function getProjectSuggestions(projectId: string): ImprovementSuggestion[] {
+  return getSuggestions().filter(s => s.project_id === projectId);
+}
+
+/**
+ * Get suggestion by ID
+ */
+export function getSuggestion(suggestionId: string): ImprovementSuggestion | null {
+  const suggestions = getSuggestions();
+  return suggestions.find(s => s.id === suggestionId) || null;
+}
+
+/**
+ * Get suggestions by status
+ */
+export function getSuggestionsByStatus(
+  projectId: string,
+  status: string
+): ImprovementSuggestion[] {
+  return getSuggestions().filter(
+    s => s.project_id === projectId && s.status === status
+  );
+}
+
+/**
+ * Get approved suggestions for a project
+ */
+export function getApprovedSuggestions(projectId: string): ImprovementSuggestion[] {
+  return getSuggestionsByStatus(projectId, 'approved');
+}
+
+/**
+ * Create new improvement suggestion
+ */
+export function createSuggestion(
+  suggestion: ImprovementSuggestion
+): ImprovementSuggestion {
+  if (!isBrowser()) return suggestion;
+
+  const suggestions = getSuggestions();
+  suggestions.push(suggestion);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return suggestion;
+}
+
+/**
+ * Create multiple suggestions (bulk)
+ */
+export function createSuggestions(
+  newSuggestions: ImprovementSuggestion[]
+): ImprovementSuggestion[] {
+  if (!isBrowser()) return newSuggestions;
+
+  const suggestions = getSuggestions();
+  suggestions.push(...newSuggestions);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return newSuggestions;
+}
+
+/**
+ * Update suggestion
+ */
+export function updateSuggestion(
+  suggestionId: string,
+  updates: Partial<ImprovementSuggestion>
+): ImprovementSuggestion | null {
+  if (!isBrowser()) return null;
+
+  const suggestions = getSuggestions();
+  const index = suggestions.findIndex(s => s.id === suggestionId);
+  if (index === -1) return null;
+
+  suggestions[index] = { ...suggestions[index], ...updates };
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return suggestions[index];
+}
+
+/**
+ * Update suggestion status
+ */
+export function updateSuggestionStatus(
+  suggestionId: string,
+  status: string,
+  userId: string = 'user'
+): ImprovementSuggestion | null {
+  if (!isBrowser()) return null;
+
+  const updates: Partial<ImprovementSuggestion> = { status: status as any };
+  const timestamp = new Date().toISOString();
+
+  if (status === 'approved') {
+    updates.approved_at = timestamp;
+    updates.approved_by = userId;
+  } else if (status === 'rejected') {
+    updates.rejected_at = timestamp;
+    updates.rejected_by = userId;
+  } else if (status === 'implemented') {
+    updates.implemented_at = timestamp;
+  }
+
+  return updateSuggestion(suggestionId, updates);
+}
+
+/**
+ * Delete suggestion
+ */
+export function deleteSuggestion(suggestionId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const suggestions = getSuggestions().filter(s => s.id !== suggestionId);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return true;
+}
+
+/**
+ * Delete all suggestions for a project
+ */
+export function deleteProjectSuggestions(projectId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const suggestions = getSuggestions().filter(s => s.project_id !== projectId);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return true;
 }
 
 // ============ SEED DATA ============
