@@ -161,6 +161,18 @@ export default function AssignTasksButton({ projectId }: { projectId: string }) 
             assigned_to_agent_type: agentType
           });
 
+          // Trigger agent webhook for this task
+          try {
+            await fetch(`/api/agents/trigger/${agentType}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId: task.task_id })
+            });
+          } catch (triggerError) {
+            console.warn(`Failed to trigger agent for task ${task.task_id}:`, triggerError);
+            // Don't fail the whole operation if webhook fails
+          }
+
           assignedCount++;
 
         } catch (error) {
