@@ -1,8 +1,8 @@
-# Research Agent Integration Guide
+# Research Agent Integration Guide - Event-Driven Architecture
 
 ## Overview
 
-The Research Agent serves as the **intelligence layer** for the Maestro platform, providing on-demand research capabilities to other agents. This document describes how to integrate Research Agent functionality into other agents, particularly the Product Improvement Agent.
+The Research Agent operates as an **on-demand intelligence layer** for the Maestro platform, triggered by events from other agents or the UI. This document describes the event-driven architecture and integration patterns.
 
 ---
 
@@ -13,70 +13,150 @@ The Research Agent serves as the **intelligence layer** for the Maestro platform
 │                     Maestro Platform                         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
-│  ┌──────────────────┐         ┌──────────────────┐          │
-│  │ Product          │ ◄────── │ Research         │          │
-│  │ Improvement      │  Query  │ Agent            │          │
-│  │ Agent            │ ──────► │                  │          │
-│  └──────────────────┘ Results └──────────────────┘          │
-│           │                            │                     │
-│           │                            ▼                     │
-│           │                    ┌──────────────────┐         │
-│           │                    │ Knowledge        │         │
-│           │                    │ Base             │         │
-│           │                    └──────────────────┘         │
-│           │                                                  │
+│  ┌──────────────────┐                                        │
+│  │ Product          │                                        │
+│  │ Improvement      │                                        │
+│  │ Agent            │                                        │
+│  └────────┬─────────┘                                        │
+│           │ emit('research_needed')                          │
 │           ▼                                                  │
-│  ┌──────────────────┐                                       │
-│  │ Implementation   │                                       │
-│  │ Tasks            │                                       │
-│  └──────────────────┘                                       │
+│  ┌──────────────────────────────────────────┐               │
+│  │          EventBus (Pub/Sub)              │               │
+│  └──────────────┬───────────────────────────┘               │
+│                 │ research_needed event                      │
+│                 ▼                                            │
+│  ┌──────────────────────────────────────────┐               │
+│  │ Research Agent                            │               │
+│  │  ┌────────────────────────────┐          │               │
+│  │  │ Smart Cache Check          │          │               │
+│  │  │ (Knowledge Base)           │          │               │
+│  │  └───────┬────────────────────┘          │               │
+│  │          │ if cache miss                  │               │
+│  │          ▼                                 │               │
+│  │  ┌────────────────────────────┐          │               │
+│  │  │ Research Queue             │          │               │
+│  │  │ Batch: 5 req OR 6 hours    │          │               │
+│  │  └───────┬────────────────────┘          │               │
+│  │          │                                 │               │
+│  │          ▼                                 │               │
+│  │  ┌────────────────────────────┐          │               │
+│  │  │ Execute Batch              │          │               │
+│  │  │ (Claude API)               │          │               │
+│  │  └───────┬────────────────────┘          │               │
+│  │          │                                 │               │
+│  └──────────┼─────────────────────────────────┘               │
+│             │ emit('research_complete')                      │
+│             ▼                                                 │
+│  ┌──────────────────┐         ┌──────────────────┐          │
+│  │ Requesting       │ ◄────── │ Knowledge        │          │
+│  │ Agent            │         │ Base             │          │
+│  └──────────────────┘         └──────────────────┘          │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Integration Pattern 1: Direct API Integration
+## Key Features
 
-### Product Improvement Agent Enhancement
+### 1. Event-Driven Architecture
+- **No Continuous Polling**: Research Agent only activates when triggered
+- **EventBus Communication**: Loose coupling between agents
+- **Asynchronous Processing**: Non-blocking research requests
 
-Add Research Agent capabilities directly to the Product Improvement Agent:
+### 2. Smart Batching & Queue System
+- **Batch Size Trigger**: Executes when 5 requests accumulated
+- **Time-Based Trigger**: Executes after 6 hours if batch not full
+- **Reduces API Costs**: Fewer, more efficient API calls
+
+### 3. Intelligent Caching
+- **Knowledge Base Check**: Searches cache before new research
+- **Instant Cache Hits**: Returns cached results immediately
+- **API Call Reduction**: Avoids duplicate research
+
+---
+
+## Available Events
+
+### Events Emitted BY Research Agent
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `research_complete` | `{ requestId, topic, research, cached }` | Research completed successfully |
+| `research_error` | `{ requestId, error }` | Research request failed |
+| `research_batch_start` | `{ batch_size, requests }` | Batch execution started |
+| `research_batch_complete` | `{ batch_size, processed }` | Batch execution completed |
+| `research_queue_status_response` | `{ queue_size, next_execution, stats }` | Queue status response |
+
+### Events Listened TO by Research Agent
+
+| Event | Data | Description |
+|-------|------|-------------|
+| `research_needed` | `{ topic, context, requestedBy, requestId }` | Request research (queued) |
+| `research_immediate` | `{ topic, context, requestedBy, requestId }` | Request immediate research (bypasses queue) |
+| `research_queue_status` | `{}` | Request queue status |
+| `research_execute_batch` | `{}` | Force batch execution now |
+
+---
+
+## Integration Pattern: Product Improvement Agent
+
+### Example: Triggering Research on Unknown Pattern
 
 ```javascript
 const Agent = require('./agent-base');
-const ResearchAgent = require('./research-agent');
+const EventBus = require('../lib/event-bus');
 
 class ProductImprovementAgent extends Agent {
   constructor(maestroUrl = 'http://localhost:3000', anthropicApiKey = '') {
     super('product-improvement-agent', 'Product Improvement', maestroUrl, anthropicApiKey);
 
-    // Initialize Research Agent instance
-    this.researchAgent = new ResearchAgent(maestroUrl, anthropicApiKey);
+    // Setup research result listener
+    this.setupResearchListeners();
+  }
+
+  setupResearchListeners() {
+    // Listen for research completion
+    EventBus.on('research_complete', (data) => {
+      if (data.requestedBy === 'product-improvement-agent') {
+        this.handleResearchResult(data);
+      }
+    });
   }
 
   /**
-   * Analyze unknown pattern with research support
+   * Analyze unknown pattern with event-driven research
    */
   async analyzeUnknownPattern(pattern, codeExample) {
     try {
       this.log(`Analyzing unfamiliar pattern: ${pattern}`, 'info');
 
-      // Trigger Research Agent
-      const research = await this.researchAgent.conductResearch(
-        `Best practices for ${pattern}`,
-        {
+      // Generate request ID for tracking
+      const requestId = `pia-${Date.now()}`;
+
+      // Trigger research via event
+      EventBus.emit('research_needed', {
+        topic: `Best practices for ${pattern}`,
+        context: {
+          type: 'best-practices',
           codeExample: codeExample,
           requirements: 'Identify industry standards and recommended approaches'
-        }
-      );
+        },
+        requestedBy: 'product-improvement-agent',
+        requestId: requestId,
+        priority: 'normal'
+      });
 
-      // Use research findings in suggestions
+      this.log(`Research requested (ID: ${requestId}), continuing with other work...`, 'info');
+
+      // Agent can continue with other work while research is queued
+      // Result will come via 'research_complete' event
+
       return {
         pattern,
-        research_findings: research.findings,
-        recommendations: research.recommendations,
-        confidence: research.confidence,
-        research_report: research.report_path
+        research_requested: true,
+        requestId: requestId,
+        status: 'research_queued'
       };
     } catch (error) {
       this.log(`Error analyzing pattern: ${error.message}`, 'error');
@@ -85,109 +165,24 @@ class ProductImprovementAgent extends Agent {
   }
 
   /**
-   * Enhanced executeTask with research integration
+   * Handle research results when they arrive
    */
-  async executeTask(task) {
-    try {
-      // Check if task requires research
-      const needsResearch = this.detectResearchNeed(task);
+  handleResearchResult(data) {
+    const { requestId, topic, research, cached } = data;
 
-      let researchContext = '';
-      if (needsResearch) {
-        this.log(`Task requires research: ${needsResearch.topic}`, 'info');
+    this.log(`Research complete: ${topic} (cached: ${cached})`, 'info');
 
-        const research = await this.researchAgent.findBestPractices(
-          needsResearch.topic
-        );
+    // Use research findings
+    const recommendations = research.recommendations || [];
+    const findings = research.findings || [];
 
-        researchContext = `\n\nResearch Context:\n${research.guidance}\n`;
-      }
-
-      const systemPrompt = `You are a Product Improvement Agent for Maestro.
-Your role is to analyze tasks and provide recommendations for product enhancements,
-feature improvements, and user experience optimizations.
-Focus on clarity, impact, and feasibility.
-
-${researchContext}`;
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.anthropicApiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 8000,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: task.ai_prompt || task.description || task.title,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const content = data.content?.[0]?.text || '';
-
-      return {
-        status: 'success',
-        content: content,
-        taskId: task.task_id,
-        research_used: needsResearch ? needsResearch.topic : null,
-      };
-    } catch (error) {
-      this.log(`Error executing task ${task.task_id}: ${error.message}`, 'error');
-      return {
-        status: 'error',
-        error: error.message,
-        taskId: task.task_id,
-      };
-    }
+    // Apply recommendations to product improvements
+    this.applyResearchFindings(topic, findings, recommendations);
   }
 
-  /**
-   * Detect if task requires research
-   */
-  detectResearchNeed(task) {
-    const taskText = (task.ai_prompt || task.description || task.title).toLowerCase();
-
-    // Patterns that indicate research need
-    const researchPatterns = [
-      { pattern: /what is|what are|how does|how do/i, type: 'explanation' },
-      { pattern: /best practice|recommended approach|industry standard/i, type: 'best-practices' },
-      { pattern: /compare|versus|vs\.|alternative/i, type: 'comparison' },
-      { pattern: /implement|build|create.*using/i, type: 'implementation' },
-    ];
-
-    for (const { pattern, type } of researchPatterns) {
-      if (pattern.test(taskText)) {
-        // Extract topic from task
-        const topic = this.extractTopic(taskText);
-        return { topic, type };
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract research topic from task text
-   */
-  extractTopic(taskText) {
-    // Simple topic extraction - can be enhanced with NLP
-    const words = taskText.split(/\s+/);
-    const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'];
-    const keywords = words.filter(w => !stopWords.includes(w.toLowerCase()) && w.length > 3);
-    return keywords.slice(0, 3).join(' ');
+  applyResearchFindings(topic, findings, recommendations) {
+    // Implementation logic here
+    this.log(`Applying ${findings.length} findings and ${recommendations.length} recommendations`, 'info');
   }
 }
 
@@ -196,299 +191,469 @@ module.exports = ProductImprovementAgent;
 
 ---
 
-## Integration Pattern 2: Task Delegation
+## Integration Pattern: Wait for Research
 
-### Creating Research Tasks
-
-Product Improvement Agent can delegate research to Research Agent via Maestro task system:
+### Example: Immediate Research with Wait
 
 ```javascript
-async delegateResearch(topic, context) {
-  try {
-    // Create a research task in Maestro
-    const response = await fetch(`${this.maestroUrl}/api/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+const EventBus = require('../lib/event-bus');
+
+class BackendAgent extends Agent {
+  async implementFeature(featureSpec) {
+    // Request immediate research (bypasses queue)
+    const requestId = `backend-${Date.now()}`;
+
+    EventBus.emit('research_immediate', {
+      topic: `${featureSpec.technology} implementation patterns`,
+      context: {
+        type: 'best-practices',
+        requirements: featureSpec.requirements
       },
-      body: JSON.stringify({
-        title: `Research: ${topic}`,
-        description: `Conduct research on: ${topic}`,
-        assigned_to: 'research-agent',
-        priority: 'high',
-        ai_prompt: `Conduct comprehensive research on: ${topic}\n\nContext: ${JSON.stringify(context)}`,
-        metadata: {
-          requested_by: 'product-improvement-agent',
-          research_type: 'best-practices',
-        }
-      }),
+      requestedBy: 'backend-agent',
+      requestId: requestId
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to create research task`);
-    }
+    // Wait for research to complete
+    try {
+      const result = await EventBus.waitFor('research_complete', 30000);
 
-    const data = await response.json();
-    this.log(`Created research task: ${data.task_id}`, 'info');
+      if (result.requestId === requestId) {
+        this.log(`Research received: ${result.research.confidence} confidence`, 'info');
 
-    return data.task_id;
-  } catch (error) {
-    this.log(`Error delegating research: ${error.message}`, 'error');
-    throw error;
-  }
-}
-
-async waitForResearch(taskId, maxWaitMs = 120000) {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < maxWaitMs) {
-    const response = await fetch(`${this.maestroUrl}/api/tasks/${taskId}`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to check research task status`);
-    }
-
-    const task = await response.json();
-
-    if (task.status === 'done') {
-      return task.ai_response;
-    }
-
-    if (task.status === 'blocked') {
-      throw new Error(`Research task blocked: ${task.ai_response}`);
-    }
-
-    // Wait 5 seconds before checking again
-    await this.delay(5000);
-  }
-
-  throw new Error(`Research timeout after ${maxWaitMs}ms`);
-}
-```
-
----
-
-## Integration Pattern 3: Knowledge Base Access
-
-### Direct Knowledge Base Queries
-
-Any agent can directly query the Knowledge Base without invoking Research Agent:
-
-```javascript
-const KnowledgeBase = require('../lib/knowledge-base');
-
-class AnyAgent extends Agent {
-  constructor(maestroUrl, anthropicApiKey) {
-    super('any-agent', 'Any Type', maestroUrl, anthropicApiKey);
-    this.knowledgeBase = new KnowledgeBase();
-  }
-
-  async checkExistingResearch(topic) {
-    // Search knowledge base
-    const existing = this.knowledgeBase.search(topic);
-
-    if (existing.length > 0) {
-      this.log(`Found ${existing.length} existing research items on: ${topic}`, 'info');
-      return existing[0]; // Return most recent
-    }
-
-    return null;
-  }
-
-  async executeTaskWithKnowledge(task) {
-    // Check knowledge base first
-    const knowledge = await this.checkExistingResearch(task.title);
-
-    let knowledgeContext = '';
-    if (knowledge) {
-      knowledgeContext = `\n\nExisting Research:\n${knowledge.content}\n`;
-    }
-
-    // Use knowledge in prompt
-    // ... rest of implementation
-  }
-}
-```
-
----
-
-## Usage Examples
-
-### Example 1: Product Improvement Agent Encounters Unknown Pattern
-
-```javascript
-// In Product Improvement Agent
-async analyzeFeatureRequest(featureRequest) {
-  // Detect unfamiliar technology
-  if (featureRequest.includes('WebAssembly')) {
-    const research = await this.researchAgent.conductResearch(
-      'WebAssembly best practices for web applications',
-      {
-        requirements: featureRequest,
-        additionalInfo: 'Focus on integration with existing JavaScript apps'
+        // Use research in implementation
+        return this.implementWithGuidance(featureSpec, result.research);
       }
-    );
-
-    return {
-      feature: featureRequest,
-      feasibility: 'High',
-      research_insights: research.recommendations,
-      implementation_guidance: research.findings,
-    };
+    } catch (error) {
+      this.log(`Research timeout: ${error.message}`, 'warn');
+      // Proceed without research guidance
+      return this.implementWithoutGuidance(featureSpec);
+    }
   }
 }
 ```
 
-### Example 2: Competitive Analysis
+---
+
+## Integration Pattern: UI Triggering Research
+
+### Example: User Requests Research from Frontend
 
 ```javascript
-// Trigger competitor research
-async analyzeCompetitorFeatures(competitorUrls) {
-  const analysis = await this.researchAgent.analyzeCompetitors(competitorUrls);
+// In a React component or API endpoint
 
-  return {
-    competitive_analysis: analysis.analysis,
-    differentiation_opportunities: this.extractOpportunities(analysis.analysis),
-    implementation_priority: 'high',
-  };
+async function requestResearch(topic, context) {
+  const EventBus = require('../lib/event-bus');
+
+  const requestId = `ui-${Date.now()}`;
+
+  // Listen for completion
+  const unsubscribe = EventBus.on('research_complete', (data) => {
+    if (data.requestId === requestId) {
+      unsubscribe(); // Remove listener
+      displayResearchResults(data.research);
+    }
+  });
+
+  // Trigger research
+  EventBus.emit('research_needed', {
+    topic: topic,
+    context: context,
+    requestedBy: 'ui',
+    requestId: requestId,
+    priority: 'normal'
+  });
+
+  // Show user that research is queued
+  showNotification(`Research queued: ${topic}`);
 }
-```
 
-### Example 3: Best Practices Research
-
-```javascript
-// Before implementing new feature
-async planImplementation(featureSpec) {
-  const bestPractices = await this.researchAgent.findBestPractices(
-    featureSpec.technology
-  );
-
-  return {
-    feature: featureSpec,
-    recommended_approach: bestPractices.guidance,
-    existing_research_count: bestPractices.existing_research,
-    confidence_level: 'high',
-  };
+function displayResearchResults(research) {
+  // Display research report to user
+  console.log('Research complete:', research);
 }
 ```
 
 ---
 
-## Knowledge Base Statistics
+## Queue Management
 
-Monitor knowledge base growth and usage:
+### Check Queue Status
 
 ```javascript
-const kb = new KnowledgeBase();
-const stats = kb.getStats();
+const EventBus = require('../lib/event-bus');
 
-console.log(`Total Research Reports: ${stats.total_reports}`);
-console.log(`Research Types:`, stats.types);
-console.log(`Total Tags: ${stats.total_tags}`);
+// Request queue status
+EventBus.emit('research_queue_status');
+
+// Listen for response
+EventBus.once('research_queue_status_response', (data) => {
+  console.log('Queue size:', data.queue_size);
+  console.log('Next execution:', data.next_execution);
+  console.log('Stats:', data.stats);
+});
+```
+
+### Force Batch Execution
+
+```javascript
+// Force immediate batch execution (useful for testing or high priority)
+EventBus.emit('research_execute_batch');
 ```
 
 ---
 
-## API Reference
+## Batch Configuration
 
-### ResearchAgent Methods
+### Default Settings
 
-#### `conductResearch(topic, context)`
-Conducts comprehensive research and returns structured report.
+```javascript
+{
+  batchSize: 5,              // Execute when 5 requests queued
+  batchInterval: 21600000    // 6 hours in milliseconds
+}
+```
 
-**Parameters:**
-- `topic` (string): Research topic
-- `context` (object): Additional context
-  - `codeExample` (string): Code sample to analyze
-  - `requirements` (string): Specific requirements
-  - `additionalInfo` (string): Extra context
+### Execution Triggers
 
-**Returns:** Research report object with findings, recommendations, sources, and confidence level.
+1. **Batch Size Reached**: Queue reaches 5 research requests
+2. **Time Elapsed**: 6 hours since first request in batch
+3. **Manual Trigger**: `research_execute_batch` event
+4. **Immediate Research**: `research_immediate` event (bypasses queue)
 
-#### `analyzeCompetitors(competitorUrls)`
-Analyzes competitor implementations.
+---
 
-**Parameters:**
-- `competitorUrls` (array): URLs or descriptions of competitors
+## Statistics & Monitoring
 
-**Returns:** Comparison analysis with strengths, weaknesses, and recommendations.
+### Get Research Agent Statistics
 
-#### `findBestPractices(technology)`
-Finds industry best practices for a technology.
+```javascript
+const EventBus = require('../lib/event-bus');
 
-**Parameters:**
-- `technology` (string): Technology or pattern name
+// Listen for statistics
+EventBus.on('research_queue_status_response', (data) => {
+  const stats = data.stats;
 
-**Returns:** Best practices guidance with actionable recommendations.
+  console.log(`Events received: ${stats.events_received}`);
+  console.log(`Requests queued: ${stats.requests_queued}`);
+  console.log(`Requests processed: ${stats.requests_processed}`);
+  console.log(`Cache hits: ${stats.requests_cached}`);
+  console.log(`API calls saved: ${stats.api_calls_saved}`);
+  console.log(`Batches executed: ${stats.batches_executed}`);
+});
 
-### KnowledgeBase Methods
+// Request status
+EventBus.emit('research_queue_status');
+```
 
-#### `save(research)`
-Saves research to knowledge base.
+---
 
-#### `search(query)`
-Searches knowledge base by query.
+## Smart Caching
 
-#### `getByTopic(topic)`
-Gets all research on specific topic.
+### How It Works
 
-#### `getByTag(tag)`
-Gets research by tag.
+1. **Event Received**: `research_needed` event triggered
+2. **Cache Check**: Search Knowledge Base for existing research
+3. **Cache Hit**: Return cached result immediately via `research_complete` event
+4. **Cache Miss**: Add to queue for batch processing
 
-#### `getByType(type)`
-Gets research by type (research-report, competitor-analysis, best-practices).
+### Benefits
 
-#### `getStats()`
-Gets knowledge base statistics.
+- **Instant Results**: Cached research returned in <10ms
+- **Zero API Costs**: No API calls for cached results
+- **API Call Reduction**: Typical 30-50% reduction in API calls
+- **Knowledge Accumulation**: Knowledge base grows over time
+
+### Cache Statistics
+
+```javascript
+const researchAgent = new ResearchAgent();
+const stats = researchAgent.getResearchStats();
+
+console.log('Cache hit rate:',
+  (stats.requests_cached / (stats.requests_cached + stats.requests_processed) * 100).toFixed(2) + '%'
+);
+```
+
+---
+
+## Running the Research Agent
+
+### Event-Driven Mode (Default)
+
+```bash
+# Start Research Agent in event-driven mode
+node agents/research-agent.js event-driven
+
+# Or simply (defaults to event-driven)
+node agents/research-agent.js
+```
+
+### Legacy Polling Mode
+
+```bash
+# For backward compatibility with task-based system
+node agents/research-agent.js polling
+```
+
+---
+
+## Complete Example: End-to-End Flow
+
+```javascript
+const EventBus = require('../lib/event-bus');
+
+// 1. Product Improvement Agent encounters unknown pattern
+class ProductImprovementAgent {
+  async analyzeCodePattern(code) {
+    const pattern = this.detectPattern(code);
+
+    if (this.isUnknownPattern(pattern)) {
+      // 2. Trigger research
+      EventBus.emit('research_needed', {
+        topic: `Best practices for ${pattern}`,
+        context: {
+          type: 'best-practices',
+          codeExample: code
+        },
+        requestedBy: 'product-improvement-agent',
+        requestId: 'pia-001'
+      });
+
+      // 3. Continue with other work (non-blocking)
+      this.log('Research queued, continuing with other tasks');
+    }
+  }
+}
+
+// 4. Research Agent processes request (when batch triggers)
+// - Checks cache (miss)
+// - Adds to queue
+// - Waits for batch trigger (5 requests or 6 hours)
+// - Executes batch
+// - Calls Claude API
+// - Saves to Knowledge Base
+// - Emits 'research_complete'
+
+// 5. Product Improvement Agent receives result
+EventBus.on('research_complete', (data) => {
+  if (data.requestId === 'pia-001') {
+    console.log('Research complete:', data.research.recommendations);
+    // Apply recommendations to product improvements
+  }
+});
+```
+
+---
+
+## EventBus API Reference
+
+### Core Methods
+
+#### `EventBus.on(eventName, callback)`
+Subscribe to an event.
+
+**Returns:** Unsubscribe function
+
+```javascript
+const unsubscribe = EventBus.on('research_complete', (data) => {
+  console.log(data);
+});
+
+// Later: unsubscribe()
+```
+
+#### `EventBus.once(eventName, callback)`
+Subscribe to an event (auto-unsubscribe after first call).
+
+```javascript
+EventBus.once('research_complete', (data) => {
+  console.log('This will only fire once');
+});
+```
+
+#### `EventBus.emit(eventName, data)`
+Emit an event (async).
+
+```javascript
+await EventBus.emit('research_needed', {
+  topic: 'React hooks best practices',
+  requestedBy: 'frontend-agent'
+});
+```
+
+#### `EventBus.waitFor(eventName, timeout)`
+Wait for a specific event (Promise-based).
+
+```javascript
+try {
+  const result = await EventBus.waitFor('research_complete', 30000);
+  console.log(result);
+} catch (error) {
+  console.log('Timeout waiting for event');
+}
+```
+
+#### `EventBus.getStats()`
+Get EventBus statistics.
+
+```javascript
+const stats = EventBus.getStats();
+console.log('Total events:', stats.total_events);
+console.log('Total listeners:', stats.total_listeners);
+```
 
 ---
 
 ## Best Practices
 
-1. **Check Knowledge Base First**: Always search existing research before triggering new research.
+### 1. Always Include Request ID
+```javascript
+EventBus.emit('research_needed', {
+  topic: 'GraphQL best practices',
+  requestId: `agent-${Date.now()}`, // Track this request
+  requestedBy: 'backend-agent'
+});
+```
 
-2. **Use Appropriate Methods**:
-   - `conductResearch()` for general research
-   - `analyzeCompetitors()` for competitive analysis
-   - `findBestPractices()` for implementation guidance
+### 2. Handle Both Cache Hits and Misses
+```javascript
+EventBus.on('research_complete', (data) => {
+  if (data.cached) {
+    console.log('Got instant cached result');
+  } else {
+    console.log('Got fresh research from API');
+  }
+});
+```
 
-3. **Provide Context**: Include code examples and requirements for better research quality.
+### 3. Use Priority Appropriately
+```javascript
+// Normal priority (queued)
+EventBus.emit('research_needed', { topic: 'CSS animations', priority: 'normal' });
 
-4. **Tag Research**: Use relevant tags for better organization and retrieval.
+// High priority (use research_immediate)
+EventBus.emit('research_immediate', { topic: 'Security vulnerability fix' });
+```
 
-5. **Monitor Confidence**: Check confidence levels in research reports.
+### 4. Monitor Queue Growth
+```javascript
+// Periodic queue status checks
+setInterval(() => {
+  EventBus.emit('research_queue_status');
+}, 60000); // Every minute
+```
 
-6. **Cache Aggressively**: Use knowledge base to avoid redundant research.
+### 5. Clean Up Event Listeners
+```javascript
+const unsubscribe = EventBus.on('research_complete', handler);
+
+// When done
+unsubscribe();
+```
 
 ---
 
 ## Troubleshooting
 
-### Issue: Research Agent not responding
-- Check ANTHROPIC_API_KEY is set
+### Research Not Executing
+
+**Issue**: Queue has items but batch doesn't execute
+
+**Solutions**:
+- Check if batch size reached (need 5 requests)
+- Check if 6 hours elapsed since first request
+- Force execution: `EventBus.emit('research_execute_batch')`
 - Verify Research Agent is running
-- Check network connectivity to Anthropic API
 
-### Issue: Knowledge base not persisting
-- Verify `./research-reports` directory exists
-- Check file permissions
-- Verify disk space
+### No Research Complete Event
 
-### Issue: Duplicate research
-- Use `knowledgeBase.search()` before triggering new research
-- Implement deduplication logic in your agent
+**Issue**: Triggered research but never received result
+
+**Solutions**:
+- Check requestId matches in event listener
+- Verify Research Agent is running
+- Check for errors in Research Agent logs
+- Listen for `research_error` events
+
+### Duplicate Research
+
+**Issue**: Same research executed multiple times
+
+**Solutions**:
+- Knowledge Base cache should prevent this
+- Verify Knowledge Base is properly initialized
+- Check if topics are spelled exactly the same
+
+---
+
+## Performance Metrics
+
+### Expected Performance
+
+| Metric | Target |
+|--------|--------|
+| Cache hit response time | <10ms |
+| Queue add time | <5ms |
+| Batch execution time | 30-120s (5 requests) |
+| API call reduction | 30-50% |
+| Event propagation | <2ms |
+
+### Monitoring
+
+```javascript
+// Log all events for debugging
+EventBus.on('research_complete', (data) => {
+  console.log('[PERF] Research complete:', {
+    cached: data.cached,
+    topic: data.topic,
+    requestId: data.requestId
+  });
+});
+
+EventBus.on('research_batch_complete', (data) => {
+  console.log('[PERF] Batch complete:', {
+    batch_size: data.batch_size,
+    processed: data.processed
+  });
+});
+```
+
+---
+
+## Migration from Direct API Integration
+
+### Before (Direct Integration)
+
+```javascript
+const researchAgent = new ResearchAgent();
+const research = await researchAgent.conductResearch(topic, context);
+// Blocking call, immediate API usage
+```
+
+### After (Event-Driven)
+
+```javascript
+const EventBus = require('../lib/event-bus');
+
+EventBus.emit('research_needed', {
+  topic,
+  context,
+  requestedBy: 'my-agent'
+});
+// Non-blocking, batched, cached
+```
 
 ---
 
 ## Future Enhancements
 
-1. **Web Search Integration**: Add real-time web search capabilities
-2. **Document Parsing**: Extract information from PDFs and documentation
-3. **Citation Tracking**: Maintain source attribution
-4. **Version Control**: Track research updates and changes
-5. **Collaborative Research**: Multiple agents contributing to same research
-6. **ML-Based Topic Extraction**: Better automatic topic detection
-7. **Research Quality Scoring**: Automated quality assessment
+1. **Priority Queue**: High-priority requests jump the queue
+2. **Research Scheduling**: Schedule research for specific times
+3. **Distributed EventBus**: Multi-server event propagation
+4. **Research Templates**: Pre-defined research types
+5. **Webhooks**: External integrations via webhooks
+6. **Research History**: Query past research requests
+7. **Batch Analytics**: ML-based optimal batch sizing
 
 ---
 
@@ -496,11 +661,12 @@ Gets knowledge base statistics.
 
 For issues or questions about Research Agent integration:
 - File an issue in the Maestro repository
-- Check the Knowledge Base for existing research on integration patterns
-- Review agent logs for debugging information
+- Check EventBus logs for debugging
+- Monitor Research Agent statistics
+- Review agent logs for errors
 
 ---
 
 **Last Updated:** 2025-11-05
-**Version:** 1.0.0
+**Version:** 2.0.0 (Event-Driven Architecture)
 **Maintainer:** Maestro Platform Team
