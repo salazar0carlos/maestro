@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Agent, SystemHealth, Bottleneck, Alert, MaestroTask } from '@/lib/types';
-import { getTasks } from '@/lib/storage';
+import { getTasks } from '@/lib/storage-adapter';
 import { Card } from '@/components/Card';
 import { getSystemHealth, getStuckAgents, getIdleAgents, getOfflineAgents } from '@/lib/agent-health';
 import { detectBottlenecks } from '@/lib/bottleneck-detection';
@@ -26,7 +26,7 @@ export default function AgentsPage() {
   const [taskHistory, setTaskHistory] = useState<MaestroTask[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const loadData = () => {
+  const loadData = async () => {
     const allAgents = getAllAgents();
     const stuckAgentIds = new Set(getStuckAgents().map(a => a.agent_id));
     const idleAgentIds = new Set(getIdleAgents().map(a => a.agent_id));
@@ -59,11 +59,12 @@ export default function AgentsPage() {
     setBottlenecks(detectBottlenecks());
     setAlerts(generateAlerts());
 
-    // Load task history (last 50 tasks)
-    const allTasks = getTasks().sort((a, b) =>
+    // Load task history (last 50 tasks) - now async
+    const allTasks = await getTasks();
+    const sortedTasks = allTasks.sort((a, b) =>
       new Date(b.created_date).getTime() - new Date(a.created_date).getTime()
     );
-    setTaskHistory(allTasks.slice(0, 50));
+    setTaskHistory(sortedTasks.slice(0, 50));
 
     setLastUpdate(new Date());
     setIsLoading(false);
@@ -78,7 +79,8 @@ export default function AgentsPage() {
   }, []);
 
   const getAgentStats = (agentId: string) => {
-    const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
+    // Use taskHistory instead of calling getTasks() to avoid async issues
+    const tasks = taskHistory.filter(t => t.assigned_to_agent === agentId);
     return {
       total: tasks.length,
       todo: tasks.filter(t => t.status === 'todo').length,

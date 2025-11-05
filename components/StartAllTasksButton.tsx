@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getTasks } from '@/lib/storage';
+import { getTasks } from '@/lib/storage-adapter';
 
 interface StartResult {
   success: boolean;
@@ -19,7 +19,7 @@ export default function StartAllTasksButton({ projectId }: { projectId: string }
     setResult(null);
 
     try {
-      const allTasks = getTasks();
+      const allTasks = await getTasks();
       const projectTasks = allTasks.filter(t => t.project_id === projectId);
 
       let triggeredCount = 0;

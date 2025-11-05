@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getProjects, getTasks, getAgents, createAgent, updateTask } from '@/lib/storage';
+import { getProjects, getTasks, getAgents, createAgent, updateTask } from '@/lib/storage-adapter';
 
 interface AssignmentResult {
   success: boolean;
@@ -83,7 +83,7 @@ export default function AssignTasksButton({ projectId }: { projectId: string }) 
     return bestType;
   };
 
-  const getOrCreateAgent = (projectId: string, agentType: string, existingAgents: any[]) => {
+  const getOrCreateAgent = async (projectId: string, agentType: string, existingAgents: any[]) => {
     let agent = existingAgents.find(a =>
       a.project_id === projectId && a.agent_type === agentType
     );
@@ -110,7 +110,7 @@ export default function AssignTasksButton({ projectId }: { projectId: string }) 
       capabilities: agentTypes[agentType].capabilities
     };
 
-    createAgent(agent);
+    await createAgent(agent);
     existingAgents.push(agent);
 
     return { agent, created: true };
@@ -121,16 +121,16 @@ export default function AssignTasksButton({ projectId }: { projectId: string }) 
     setResult(null);
 
     try {
-      const projects = getProjects();
+      const projects = await getProjects();
       const project = projects.find(p => p.project_id === projectId);
 
       if (!project) {
         throw new Error('Project not found');
       }
 
-      const allTasks = getTasks();
+      const allTasks = await getTasks();
       const projectTasks = allTasks.filter(t => t.project_id === projectId);
-      const agents = getAgents();
+      const agents = await getAgents();
 
       let assignedCount = 0;
       let skippedCount = 0;
@@ -149,14 +149,14 @@ export default function AssignTasksButton({ projectId }: { projectId: string }) 
           const agentType = determineAgentType(task);
 
           // Get or create agent
-          const { agent, created } = getOrCreateAgent(project.project_id, agentType, agents);
+          const { agent, created } = await getOrCreateAgent(project.project_id, agentType, agents);
 
           if (created) {
             createdAgentsCount++;
           }
 
           // Assign task to agent
-          updateTask(task.task_id, {
+          await updateTask(task.task_id, {
             assigned_to_agent: agent.agent_id,
             assigned_to_agent_type: agentType
           });

@@ -6,14 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAgent, getTasks } from '@/lib/storage';
+import { getAgent, getTasks } from '@/lib/storage-adapter';
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const agent = getAgent(params.id);
+    const agent = await getAgent(params.id);
 
     if (!agent) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function GET(
     }
 
     // Get all tasks for this agent
-    const allTasks = getTasks();
+    const allTasks = await getTasks();
     const agentTasks = allTasks.filter(t => t.assigned_to_agent === params.id);
 
     // Count tasks by status

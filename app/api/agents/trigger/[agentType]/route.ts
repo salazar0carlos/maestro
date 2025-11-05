@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getTask } from '@/lib/storage';
+import { getTask } from '@/lib/storage-adapter';
 import { getAgentConfig } from '@/lib/agent-config';
 
 export async function POST(

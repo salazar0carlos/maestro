@@ -130,6 +130,21 @@ export async function getTask(taskId: string): Promise<MaestroTask | null> {
   return data;
 }
 
+export async function getAgentTasks(projectId: string, agentId: string): Promise<MaestroTask[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('assigned_to_agent', agentId);
+
+  if (error) {
+    console.error('[storage-db] Error fetching agent tasks:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
 export async function getTasksByStatus(projectId: string, status: string): Promise<MaestroTask[]> {
   const { data, error } = await supabase
     .from('tasks')
@@ -165,13 +180,15 @@ export async function createTask(task: MaestroTask): Promise<MaestroTask> {
     });
   }
 
-  // Enqueue task for agent execution
-  if (task.assigned_to_agent && task.status === 'todo') {
-    // Import dynamically to avoid circular dependency
+  // Enqueue task for agent execution (server-side only)
+  if (typeof window === 'undefined' && task.assigned_to_agent && task.status === 'todo') {
+    // Import dynamically to avoid circular dependency and client-side bundling
     import('./queue').then(({ enqueueTask }) => {
       enqueueTask(data).catch(error => {
         console.error('[storage-db] Failed to enqueue task:', error);
       });
+    }).catch(error => {
+      console.error('[storage-db] Failed to load queue module:', error);
     });
   }
 

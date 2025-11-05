@@ -17,7 +17,7 @@ import {
   getProjectTasks,
   getAgentTasks,
   getTasksByStatus,
-} from '@/lib/storage';
+} from '@/lib/storage-adapter';
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +29,7 @@ export async function GET(
     const status = searchParams.get('status');
 
     // Verify project exists
-    const project = getProject(params.id);
+    const project = await getProject(params.id);
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found', status: 404 },
@@ -42,17 +42,17 @@ export async function GET(
     // Get tasks based on filters
     if (agent && status) {
       // Both agent and status filters
-      const allTasks = getAgentTasks(params.id, agent);
+      const allTasks = await getAgentTasks(params.id, agent);
       tasks = allTasks.filter(t => t.status === status);
     } else if (agent) {
       // Only agent filter
-      tasks = getAgentTasks(params.id, agent);
+      tasks = await getAgentTasks(params.id, agent);
     } else if (status) {
       // Only status filter
-      tasks = getTasksByStatus(params.id, status);
+      tasks = await getTasksByStatus(params.id, status);
     } else {
       // No filters
-      tasks = getProjectTasks(params.id);
+      tasks = await getProjectTasks(params.id);
     }
 
     // Sort by priority (1 = highest)

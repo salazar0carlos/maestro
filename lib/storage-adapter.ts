@@ -112,6 +112,15 @@ export async function getTask(taskId: string): Promise<MaestroTask | null> {
   }
 }
 
+export async function getAgentTasks(projectId: string, agentId: string): Promise<MaestroTask[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getAgentTasks(projectId, agentId);
+  } else {
+    return Promise.resolve(storage.getAgentTasks(projectId, agentId));
+  }
+}
+
 export async function getTasksByStatus(projectId: string, status: string): Promise<MaestroTask[]> {
   const { storage, type } = await getStorage();
   if (type === 'database') {

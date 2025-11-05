@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { TaskRouter } from '@/lib/task-assignment';
-import { getTask } from '@/lib/storage';
+import { getTask } from '@/lib/storage-adapter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const task = getTask(taskId);
+    const task = await getTask(taskId);
 
     if (!task) {
       return NextResponse.json(

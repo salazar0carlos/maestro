@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MaestroTask } from '@/lib/types';
-import { createTask, getProjectAgents } from '@/lib/storage';
+import { createTask, getProjectAgents } from '@/lib/storage-adapter';
 import { generateTaskPrompt } from '@/lib/ai-prompt-generator';
 import { Modal } from './Modal';
 import { Button } from './Button';
@@ -30,9 +30,16 @@ export default function NewTaskModal({
   const [aiPrompt, setAiPrompt] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agents, setAgents] = useState<any[]>([]);
 
-  // Get available agents
-  const agents = getProjectAgents(projectId);
+  // Load available agents
+  useEffect(() => {
+    const loadAgents = async () => {
+      const projectAgents = await getProjectAgents(projectId);
+      setAgents(projectAgents);
+    };
+    loadAgents();
+  }, [projectId]);
 
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +69,7 @@ export default function NewTaskModal({
     }
   };
 
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     const task: MaestroTask = {
       task_id: `task-${Date.now()}`,
       project_id: projectId,
@@ -75,7 +82,7 @@ export default function NewTaskModal({
       created_date: new Date().toISOString(),
     };
 
-    createTask(task);
+    await createTask(task);
     onTaskCreated(task);
 
     // Reset form

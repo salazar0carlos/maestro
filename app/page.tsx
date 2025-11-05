@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Project, MaestroTask, Agent } from '@/lib/types';
-import { getProjects, createProject, seedData, createTask, createAgent } from '@/lib/storage';
+import { getProjects, createProject, seedData, createTask, createAgent } from '@/lib/storage-adapter';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
@@ -31,13 +31,16 @@ export default function Dashboard() {
 
   // Initialize projects on mount
   useEffect(() => {
-    seedData();
-    const loaded = getProjects();
-    setProjects(loaded);
-    setIsLoading(false);
+    const loadProjects = async () => {
+      await seedData();
+      const loaded = await getProjects();
+      setProjects(loaded);
+      setIsLoading(false);
+    };
+    loadProjects();
   }, []);
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!projectName.trim()) {
@@ -55,14 +58,14 @@ export default function Dashboard() {
       task_count: 0,
     };
 
-    createProject(newProject);
+    await createProject(newProject);
     setProjects([...projects, newProject]);
     setProjectName('');
     setProjectDescription('');
     setIsNewProjectOpen(false);
   };
 
-  const handleImportPDF = (parsedProjects: ParsedProject[]) => {
+  const handleImportPDF = async (parsedProjects: ParsedProject[]) => {
     let createdCount = 0;
     let tasksCount = 0;
     const newProjects: Project[] = [];
@@ -82,7 +85,7 @@ export default function Dashboard() {
         task_count: 0,
       };
 
-      createProject(newProject);
+      await createProject(newProject);
       newProjects.push(newProject);
       createdCount++;
 
@@ -97,7 +100,7 @@ export default function Dashboard() {
       }
 
       const agentIds: Record<string, string> = {};
-      agentSet.forEach((agentName, index) => {
+      for (const [index, agentName] of Array.from(agentSet).entries()) {
         const agentId = `agent-${Date.now()}-${index}`;
         const agent: Agent = {
           agent_id: agentId,
@@ -107,9 +110,9 @@ export default function Dashboard() {
           tasks_completed: 0,
           tasks_in_progress: 0,
         };
-        createAgent(agent);
+        await createAgent(agent);
         agentIds[agentName] = agentId;
-      });
+      }
 
       // If no agents mentioned, create a default agent
       if (agentSet.size === 0) {
@@ -122,13 +125,13 @@ export default function Dashboard() {
           tasks_completed: 0,
           tasks_in_progress: 0,
         };
-        createAgent(defaultAgent);
+        await createAgent(defaultAgent);
         agentIds['default'] = defaultAgentId;
       }
 
       // Create tasks
       if (parsedProject.tasks) {
-        parsedProject.tasks.forEach((parsedTask, taskIndex) => {
+        for (const [taskIndex, parsedTask] of parsedProject.tasks.entries()) {
           const taskId = `task-${Date.now()}-${taskIndex}`;
           const assignedAgent = parsedTask.agent
             ? agentIds[parsedTask.agent]
@@ -146,9 +149,9 @@ export default function Dashboard() {
             created_date: now,
           };
 
-          createTask(task);
+          await createTask(task);
           tasksCount++;
-        });
+        }
       }
 
       // Update agent count

@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateTask, getTask } from '@/lib/storage';
+import { updateTask, getTask } from '@/lib/storage-adapter';
 import { TaskStatus } from '@/lib/types';
 
 export async function PUT(
@@ -33,7 +33,7 @@ export async function PUT(
     }
 
     // Get task
-    const task = getTask(params.id);
+    const task = await getTask(params.id);
     if (!task) {
       return NextResponse.json(
         { error: 'Task not found', status: 404 },
@@ -58,7 +58,7 @@ export async function PUT(
     }
 
     // Update task
-    const updated = updateTask(params.id, updates);
+    const updated = await updateTask(params.id, updates);
 
     if (!updated) {
       return NextResponse.json(
