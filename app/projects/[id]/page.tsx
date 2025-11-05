@@ -13,6 +13,8 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import NewTaskModal from '@/components/NewTaskModal';
 import TaskDetailModal from '@/components/TaskDetailModal';
+import { useToast } from '@/components/ToastContainer';
+import { Sparkles } from 'lucide-react';
 
 const TASK_COLUMNS: TaskStatus[] = ['todo', 'in-progress', 'done'];
 
@@ -25,6 +27,8 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
   const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const { showSuccess, showError, showInfo } = useToast();
 
   useEffect(() => {
     const loaded = getProject(params.id);
@@ -62,6 +66,53 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
       deleteTask(taskId);
       setTasks(tasks.filter(t => t.task_id !== taskId));
       setIsTaskDetailOpen(false);
+    }
+  };
+
+  const handleAnalyzeProject = async () => {
+    if (!project) return;
+
+    setIsAnalyzing(true);
+    showInfo(
+      'Analysis Starting',
+      'Product Improvement Agent is analyzing your project...'
+    );
+
+    try {
+      const response = await fetch('/api/events/trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event: 'analyze_project',
+          projectId: project.project_id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to trigger analysis');
+      }
+
+      await response.json();
+
+      showSuccess(
+        'Analysis Triggered',
+        'Analysis will complete in the background. You\'ll receive a notification when it\'s done.',
+        {
+          duration: 7000,
+          link: '/improvements',
+          linkText: 'View Improvements',
+        }
+      );
+    } catch (error) {
+      console.error('Failed to trigger analysis:', error);
+      showError(
+        'Analysis Failed',
+        error instanceof Error ? error.message : 'Failed to trigger project analysis'
+      );
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -106,9 +157,21 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
             <h1 className="text-3xl font-bold text-slate-50">{project.name}</h1>
             <p className="text-slate-400 mt-1">{project.description}</p>
           </div>
-          <Button onClick={() => setIsNewTaskOpen(true)} variant="primary">
-            + New Task
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={handleAnalyzeProject}
+              variant="secondary"
+              isLoading={isAnalyzing}
+              disabled={isAnalyzing}
+              className="flex items-center gap-2"
+            >
+              <Sparkles size={16} />
+              {isAnalyzing ? 'Analyzing...' : 'Generate Improvements'}
+            </Button>
+            <Button onClick={() => setIsNewTaskOpen(true)} variant="primary">
+              + New Task
+            </Button>
+          </div>
         </div>
       </div>
 

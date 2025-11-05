@@ -4,7 +4,17 @@
  * Future: Easy migration to PostgreSQL by replacing this file
  */
 
-import { Project, MaestroTask, Agent, ImprovementSuggestion, SystemHealth, Bottleneck } from './types';
+import {
+  Project,
+  MaestroTask,
+  Agent,
+  ImprovementSuggestion,
+  SystemHealth,
+  Bottleneck,
+  Notification,
+  EventResult,
+  AgentMetrics
+} from './types';
 
 const STORAGE_KEYS = {
   PROJECTS: 'maestro:projects',
@@ -13,6 +23,9 @@ const STORAGE_KEYS = {
   SUGGESTIONS: 'maestro:suggestions',
   SYSTEM_HEALTH: 'maestro:system_health',
   BOTTLENECKS: 'maestro:bottlenecks',
+  NOTIFICATIONS: 'maestro:notifications',
+  EVENT_RESULTS: 'maestro:event_results',
+  AGENT_METRICS: 'maestro:agent_metrics',
 };
 
 /**
@@ -552,4 +565,223 @@ export function getBottlenecks(): Bottleneck[] {
     return detectBottlenecks();
   }
   return safeJsonParse(data, []);
+}
+
+// ============ NOTIFICATIONS STORAGE ============
+
+/**
+ * Get all notifications
+ */
+export function getNotifications(): Notification[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get unread notifications
+ */
+export function getUnreadNotifications(): Notification[] {
+  return getNotifications().filter(n => !n.read);
+}
+
+/**
+ * Create notification
+ */
+export function createNotification(notification: Notification): Notification {
+  if (!isBrowser()) return notification;
+
+  const notifications = getNotifications();
+  notifications.unshift(notification); // Add to beginning
+
+  // Keep only last 100 notifications
+  const trimmed = notifications.slice(0, 100);
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, safeJsonStringify(trimmed));
+
+  return notification;
+}
+
+/**
+ * Mark notification as read
+ */
+export function markNotificationRead(notificationId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const notifications = getNotifications();
+  const notification = notifications.find(n => n.notification_id === notificationId);
+
+  if (!notification) return false;
+
+  notification.read = true;
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, safeJsonStringify(notifications));
+
+  return true;
+}
+
+/**
+ * Mark all notifications as read
+ */
+export function markAllNotificationsRead(): void {
+  if (!isBrowser()) return;
+
+  const notifications = getNotifications();
+  notifications.forEach(n => n.read = true);
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, safeJsonStringify(notifications));
+}
+
+/**
+ * Delete notification
+ */
+export function deleteNotification(notificationId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const notifications = getNotifications().filter(n => n.notification_id !== notificationId);
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, safeJsonStringify(notifications));
+
+  return true;
+}
+
+/**
+ * Clear all notifications
+ */
+export function clearAllNotifications(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+}
+
+// ============ EVENT RESULTS STORAGE ============
+
+/**
+ * Get all event results
+ */
+export function getEventResults(): EventResult[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.EVENT_RESULTS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get event results for a project
+ */
+export function getProjectEventResults(projectId: string): EventResult[] {
+  return getEventResults().filter(e => e.projectId === projectId);
+}
+
+/**
+ * Create event result
+ */
+export function createEventResult(eventResult: EventResult): EventResult {
+  if (!isBrowser()) return eventResult;
+
+  const events = getEventResults();
+  events.unshift(eventResult);
+
+  // Keep only last 100 events
+  const trimmed = events.slice(0, 100);
+  localStorage.setItem(STORAGE_KEYS.EVENT_RESULTS, safeJsonStringify(trimmed));
+
+  return eventResult;
+}
+
+/**
+ * Update event result
+ */
+export function updateEventResult(
+  eventId: string,
+  updates: Partial<EventResult>
+): EventResult | null {
+  if (!isBrowser()) return null;
+
+  const events = getEventResults();
+  const index = events.findIndex(e => e.event_id === eventId);
+  if (index === -1) return null;
+
+  events[index] = { ...events[index], ...updates };
+  localStorage.setItem(STORAGE_KEYS.EVENT_RESULTS, safeJsonStringify(events));
+
+  return events[index];
+}
+
+// ============ AGENT METRICS STORAGE ============
+
+/**
+ * Get all agent metrics
+ */
+export function getAllAgentMetrics(): AgentMetrics[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.AGENT_METRICS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get metrics for a specific agent
+ */
+export function getAgentMetrics(agentId: string): AgentMetrics | null {
+  const metrics = getAllAgentMetrics();
+  return metrics.find(m => m.agent_id === agentId) || null;
+}
+
+/**
+ * Update agent metrics
+ */
+export function updateAgentMetrics(
+  agentId: string,
+  updates: Partial<AgentMetrics>
+): AgentMetrics {
+  if (!isBrowser()) {
+    return {
+      agent_id: agentId,
+      tasks_completed_today: 0,
+      tasks_completed_total: 0,
+      cost_metrics: {
+        api_calls_today: 0,
+        tokens_used_today: 0,
+        estimated_cost_today_usd: 0,
+      },
+      ...updates,
+    };
+  }
+
+  const metrics = getAllAgentMetrics();
+  const index = metrics.findIndex(m => m.agent_id === agentId);
+
+  if (index === -1) {
+    // Create new metrics
+    const newMetrics: AgentMetrics = {
+      agent_id: agentId,
+      tasks_completed_today: 0,
+      tasks_completed_total: 0,
+      cost_metrics: {
+        api_calls_today: 0,
+        tokens_used_today: 0,
+        estimated_cost_today_usd: 0,
+      },
+      ...updates,
+    };
+    metrics.push(newMetrics);
+  } else {
+    // Update existing metrics
+    metrics[index] = { ...metrics[index], ...updates };
+  }
+
+  localStorage.setItem(STORAGE_KEYS.AGENT_METRICS, safeJsonStringify(metrics));
+
+  return metrics[index];
+}
+
+/**
+ * Reset daily metrics (should be called daily)
+ */
+export function resetDailyMetrics(): void {
+  if (!isBrowser()) return;
+
+  const metrics = getAllAgentMetrics();
+  metrics.forEach(m => {
+    m.cost_metrics.api_calls_today = 0;
+    m.cost_metrics.tokens_used_today = 0;
+    m.cost_metrics.estimated_cost_today_usd = 0;
+    m.tasks_completed_today = 0;
+  });
+
+  localStorage.setItem(STORAGE_KEYS.AGENT_METRICS, safeJsonStringify(metrics));
 }

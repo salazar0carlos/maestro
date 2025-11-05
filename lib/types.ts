@@ -132,3 +132,78 @@ export interface Bottleneck {
   stuck_duration_minutes: number;
   recommended_action: string;
 }
+
+/**
+ * Event types that can be triggered
+ */
+export type EventType =
+  | 'analyze_project'
+  | 'generate_tests'
+  | 'review_code'
+  | 'optimize_performance';
+
+/**
+ * Event trigger request
+ */
+export interface EventTrigger {
+  event: EventType;
+  projectId: string;
+  metadata?: Record<string, unknown>;
+  triggered_by?: string;
+  triggered_at: string;
+}
+
+/**
+ * Event result/completion
+ */
+export interface EventResult {
+  event_id: string;
+  event: EventType;
+  projectId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: unknown;
+  error?: string;
+  started_at: string;
+  completed_at?: string;
+  duration_ms?: number;
+  cost_metrics?: {
+    api_calls: number;
+    tokens_used: number;
+    estimated_cost_usd: number;
+  };
+}
+
+/**
+ * Notification types
+ */
+export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+
+/**
+ * User notification
+ */
+export interface Notification {
+  notification_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link?: string;
+  link_text?: string;
+  read: boolean;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Agent metrics for event-driven architecture
+ */
+export interface AgentMetrics {
+  agent_id: string;
+  last_triggered?: string;
+  tasks_completed_today: number;
+  tasks_completed_total: number;
+  cost_metrics: {
+    api_calls_today: number;
+    tokens_used_today: number;
+    estimated_cost_today_usd: number;
+  };
+}

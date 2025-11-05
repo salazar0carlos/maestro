@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Agent, Project, SystemHealth, Bottleneck } from '@/lib/types';
+import { Agent, Project, SystemHealth, Bottleneck, AgentMetrics } from '@/lib/types';
 import {
   getAgents,
   getProject,
-  getTasks,
   calculateSystemHealth,
-  detectBottlenecks
+  detectBottlenecks,
+  getAgentMetrics
 } from '@/lib/storage';
 import { Card } from '@/components/Card';
 import { AlertCircle } from 'lucide-react';
@@ -17,13 +17,14 @@ export default function AgentsPage() {
   const [projectMap, setProjectMap] = useState<Record<string, Project>>({});
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>([]);
+  const [agentMetricsMap, setAgentMetricsMap] = useState<Record<string, AgentMetrics>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadData();
 
-    // Set up polling for real-time updates every 30 seconds
-    const interval = setInterval(loadData, 30000);
+    // Set up polling for real-time updates every 10 seconds (fallback)
+    const interval = setInterval(loadData, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -42,6 +43,16 @@ export default function AgentsPage() {
     });
     setProjectMap(map);
 
+    // Load agent metrics
+    const metricsMap: Record<string, AgentMetrics> = {};
+    loaded.forEach(agent => {
+      const metrics = getAgentMetrics(agent.agent_id);
+      if (metrics) {
+        metricsMap[agent.agent_id] = metrics;
+      }
+    });
+    setAgentMetricsMap(metricsMap);
+
     // Calculate system health
     setSystemHealth(calculateSystemHealth());
 
@@ -49,17 +60,6 @@ export default function AgentsPage() {
     setBottlenecks(detectBottlenecks());
 
     setIsLoading(false);
-  };
-
-  const getAgentStats = (agentId: string) => {
-    const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
-    return {
-      total: tasks.length,
-      todo: tasks.filter(t => t.status === 'todo').length,
-      inProgress: tasks.filter(t => t.status === 'in-progress').length,
-      done: tasks.filter(t => t.status === 'done').length,
-      blocked: tasks.filter(t => t.status === 'blocked').length,
-    };
   };
 
   const getStatusIndicator = (agent: Agent) => {
@@ -185,16 +185,16 @@ export default function AgentsPage() {
                 <th className="text-left px-6 py-3 font-bold text-slate-300">Agent</th>
                 <th className="text-left px-6 py-3 font-bold text-slate-300">Project</th>
                 <th className="text-left px-6 py-3 font-bold text-slate-300">Status</th>
-                <th className="text-center px-6 py-3 font-bold text-slate-300">Tasks</th>
-                <th className="text-center px-6 py-3 font-bold text-slate-300">Progress</th>
-                <th className="text-left px-6 py-3 font-bold text-slate-300">Last Poll</th>
+                <th className="text-center px-6 py-3 font-bold text-slate-300">Completed Today</th>
+                <th className="text-center px-6 py-3 font-bold text-slate-300">Cost Today</th>
+                <th className="text-left px-6 py-3 font-bold text-slate-300">Last Triggered</th>
               </tr>
             </thead>
             <tbody>
               {agents.map(agent => {
-                const stats = getAgentStats(agent.agent_id);
                 const statusIndicator = getStatusIndicator(agent);
                 const project = projectMap[agent.project_id];
+                const metrics = agentMetricsMap[agent.agent_id];
 
                 return (
                   <tr
@@ -225,41 +225,31 @@ export default function AgentsPage() {
 
                     <td className="px-6 py-4">
                       <div className="text-center">
-                        <div className="font-bold text-slate-50">{stats.total}</div>
-                        <div className="text-xs text-slate-500">total</div>
+                        <div className="font-bold text-slate-50">
+                          {metrics?.tasks_completed_today || 0}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {metrics?.tasks_completed_total || 0} total
+                        </div>
                       </div>
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-blue-400">●</span>
-                          <span className="text-slate-300">
-                            {stats.inProgress} in progress
-                          </span>
+                      <div className="text-center">
+                        <div className="font-bold text-slate-50">
+                          ${(metrics?.cost_metrics.estimated_cost_today_usd || 0).toFixed(2)}
                         </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-green-400">●</span>
-                          <span className="text-slate-300">
-                            {stats.done} done
-                          </span>
+                        <div className="text-xs text-slate-500">
+                          {metrics?.cost_metrics.api_calls_today || 0} API calls
                         </div>
-                        {stats.blocked > 0 && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="text-red-400">●</span>
-                            <span className="text-slate-300">
-                              {stats.blocked} blocked
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </td>
 
                     <td className="px-6 py-4">
                       <div className="text-xs text-slate-500">
-                        {agent.last_poll_date
-                          ? new Date(agent.last_poll_date).toLocaleTimeString()
-                          : 'Never'}
+                        {metrics?.last_triggered
+                          ? new Date(metrics.last_triggered).toLocaleString()
+                          : 'Never triggered'}
                       </div>
                     </td>
                   </tr>

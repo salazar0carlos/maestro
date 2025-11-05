@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NotificationBell } from "@/components/NotificationBell";
+import { ClientLayout } from "@/components/ClientLayout";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,36 +17,41 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-slate-950 text-slate-50 antialiased">
-        <div className="flex h-screen flex-col">
-          {/* Header */}
-          <header className="border-b border-slate-800 bg-slate-900 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2">
-                <div className="text-xl font-bold text-blue-400">⚡ Maestro</div>
-                <span className="text-sm text-slate-400">AI Agent Command Center</span>
-              </Link>
-              <nav className="flex items-center gap-4">
-                <Link href="/" className="text-sm text-slate-300 hover:text-blue-400 transition">
-                  Projects
+        <ClientLayout>
+          <div className="flex h-screen flex-col">
+            {/* Header */}
+            <header className="border-b border-slate-800 bg-slate-900 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <Link href="/" className="flex items-center gap-2">
+                  <div className="text-xl font-bold text-blue-400">⚡ Maestro</div>
+                  <span className="text-sm text-slate-400">AI Agent Command Center</span>
                 </Link>
-                <Link href="/agents" className="text-sm text-slate-300 hover:text-blue-400 transition">
-                  Agents
-                </Link>
-                <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">
-                  Improvements
-                </Link>
-                <Link href="/settings" className="text-sm text-slate-300 hover:text-blue-400 transition">
-                  Settings
-                </Link>
-              </nav>
-            </div>
-          </header>
+                <div className="flex items-center gap-4">
+                  <nav className="flex items-center gap-4">
+                    <Link href="/" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                      Projects
+                    </Link>
+                    <Link href="/agents" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                      Agents
+                    </Link>
+                    <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                      Improvements
+                    </Link>
+                    <Link href="/settings" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                      Settings
+                    </Link>
+                  </nav>
+                  <NotificationBell />
+                </div>
+              </div>
+            </header>
 
-          {/* Main Content */}
-          <main className="flex-1 overflow-auto bg-slate-950 p-6">
-            {children}
-          </main>
-        </div>
+            {/* Main Content */}
+            <main className="flex-1 overflow-auto bg-slate-950 p-6">
+              {children}
+            </main>
+          </div>
+        </ClientLayout>
       </body>
     </html>
   );
