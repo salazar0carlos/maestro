@@ -169,10 +169,10 @@ export function createTask(task: MaestroTask): MaestroTask {
     });
   }
 
-  // Trigger agent via webhook (event-driven architecture)
+  // Enqueue task for agent execution (queue-based architecture)
   if (task.assigned_to_agent && task.status === 'todo') {
-    triggerAgentForTask(task).catch(error => {
-      console.error('[createTask] Failed to trigger agent:', error);
+    enqueueTaskForAgent(task).catch(error => {
+      console.error('[createTask] Failed to enqueue task:', error);
     });
   }
 
@@ -180,9 +180,9 @@ export function createTask(task: MaestroTask): MaestroTask {
 }
 
 /**
- * Trigger agent via webhook for task execution
+ * Enqueue task for agent execution via BullMQ
  */
-async function triggerAgentForTask(task: MaestroTask): Promise<void> {
+async function enqueueTaskForAgent(task: MaestroTask): Promise<void> {
   if (!isBrowser()) return;
 
   try {
@@ -190,16 +190,17 @@ async function triggerAgentForTask(task: MaestroTask): Promise<void> {
     const agentType = inferAgentTypeFromTask(task);
 
     if (!agentType) {
-      console.warn('[triggerAgentForTask] Could not infer agent type for task:', task.task_id);
+      console.warn('[enqueueTaskForAgent] Could not infer agent type for task:', task.task_id);
       return;
     }
 
-    const response = await fetch(`/api/agents/trigger/${agentType}`, {
+    // Call API to enqueue task
+    const response = await fetch('/api/tasks/enqueue', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ taskId: task.task_id }),
+      body: JSON.stringify({ taskId: task.task_id, task, agentType }),
     });
 
     if (!response.ok) {
