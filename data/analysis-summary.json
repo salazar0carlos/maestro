@@ -1,0 +1,23 @@
+{
+  "analysis_date": "2025-11-05T06:44:06.535Z",
+  "total_suggestions": 12,
+  "by_category": {
+    "code-quality": 3,
+    "error-handling": 2,
+    "performance": 2,
+    "ux": 3,
+    "security": 2
+  },
+  "by_priority": {
+    "high": 6,
+    "medium": 4,
+    "low": 2
+  },
+  "by_impact": {
+    "3": 4,
+    "4": 4,
+    "5": 4
+  },
+  "high_priority_count": 6,
+  "critical_security_issues": 2
+}
