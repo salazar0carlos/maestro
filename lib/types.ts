@@ -32,6 +32,7 @@ export interface MaestroTask {
   description: string;
   ai_prompt: string;
   assigned_to_agent: string;
+  assigned_to_agent_type?: string; // Frontend, Backend, Testing, DevOps, etc.
   priority: TaskPriority;
   status: TaskStatus;
   created_date: string;
