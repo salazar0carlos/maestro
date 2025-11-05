@@ -82,8 +82,8 @@ export class BaseWorker {
         }
       }
 
-      // Try localStorage path (for browser-saved keys) - read from Next.js data dir
-      if (!apiKey && typeof window === 'undefined') {
+      // Try shared config file (for worker processes)
+      if (!apiKey) {
         // Server-side: try to read from a shared config
         const configPath = path.join(process.cwd(), '.maestro-config.json');
         if (fs.existsSync(configPath)) {
