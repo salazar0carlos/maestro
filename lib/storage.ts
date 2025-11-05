@@ -4,13 +4,14 @@
  * Future: Easy migration to PostgreSQL by replacing this file
  */
 
-import { Project, MaestroTask, Agent, ImprovementSuggestion } from './types';
+import { Project, MaestroTask, Agent, ImprovementSuggestion, EventAuditLog } from './types';
 
 const STORAGE_KEYS = {
   PROJECTS: 'maestro:projects',
   TASKS: 'maestro:tasks',
   AGENTS: 'maestro:agents',
   SUGGESTIONS: 'maestro:suggestions',
+  EVENT_AUDIT: 'maestro:event_audit',
 };
 
 /**
@@ -495,4 +496,57 @@ export function clearAllData(): void {
   localStorage.removeItem(STORAGE_KEYS.PROJECTS);
   localStorage.removeItem(STORAGE_KEYS.TASKS);
   localStorage.removeItem(STORAGE_KEYS.AGENTS);
+  localStorage.removeItem(STORAGE_KEYS.SUGGESTIONS);
+  localStorage.removeItem(STORAGE_KEYS.EVENT_AUDIT);
+}
+
+// ============ EVENT AUDIT LOG ============
+
+/**
+ * Get all event audit logs
+ */
+export function getEventAuditLogs(): EventAuditLog[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.EVENT_AUDIT);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Create event audit log entry
+ */
+export function createEventAuditLog(log: EventAuditLog): EventAuditLog {
+  if (!isBrowser()) return log;
+
+  const logs = getEventAuditLogs();
+  logs.push(log);
+
+  // Keep only last 500 events to avoid storage bloat
+  const trimmedLogs = logs.slice(-500);
+
+  localStorage.setItem(STORAGE_KEYS.EVENT_AUDIT, safeJsonStringify(trimmedLogs));
+
+  return log;
+}
+
+/**
+ * Get event audit logs by type
+ */
+export function getEventAuditLogsByType(eventType: string): EventAuditLog[] {
+  return getEventAuditLogs().filter(log => log.event_type === eventType);
+}
+
+/**
+ * Get recent event audit logs
+ */
+export function getRecentEventAuditLogs(limit: number = 100): EventAuditLog[] {
+  const logs = getEventAuditLogs();
+  return logs.slice(-limit);
+}
+
+/**
+ * Clear event audit logs
+ */
+export function clearEventAuditLogs(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(STORAGE_KEYS.EVENT_AUDIT);
 }

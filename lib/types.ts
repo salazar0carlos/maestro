@@ -133,3 +133,18 @@ export interface ImprovementSuggestion {
   implemented_at?: string;
   task_id?: string;
 }
+
+/**
+ * Event Audit Log
+ * Tracks all events in the system for debugging and analytics
+ */
+export interface EventAuditLog {
+  id: string;
+  event_type: string;
+  payload: Record<string, any>;
+  timestamp: string;
+  source?: string;
+  status: 'triggered' | 'processing' | 'completed' | 'failed';
+  error_message?: string;
+  duration_ms?: number;
+}

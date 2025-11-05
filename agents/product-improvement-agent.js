@@ -250,6 +250,80 @@ Focus on clarity, impact, and feasibility.`;
       };
     }
   }
+
+  /**
+   * Initialize event-driven mode
+   * Registers event listeners instead of polling
+   * COST OPTIMIZATION: Reduces API calls by ~95%
+   */
+  initializeEventDriven() {
+    this.log('Initializing event-driven mode', 'info');
+
+    // Register event handlers
+    const { EventSystem, EventTypes } = require('../lib/event-system.js');
+
+    // Listen for analyze_project events
+    this.unsubscribe = EventSystem.on(
+      EventTypes.ANALYZE_PROJECT,
+      async (payload) => {
+        this.log(`Received ANALYZE_PROJECT event for project ${payload.projectId}`, 'info');
+
+        try {
+          // Execute analysis
+          const analysisResult = await this.analyzeCodebase(payload.projectId, payload.files);
+
+          if (analysisResult.status === 'success') {
+            // Generate suggestions
+            const suggestions = await this.generateSuggestions(
+              analysisResult.analysisReport,
+              payload.projectId
+            );
+
+            // Save suggestions
+            const { createSuggestions } = require('../lib/storage');
+            createSuggestions(suggestions);
+
+            // Emit completion event
+            EventSystem.emit(EventTypes.ANALYSIS_COMPLETED, {
+              projectId: payload.projectId,
+              suggestionsCount: suggestions.length,
+              timestamp: new Date().toISOString(),
+            });
+
+            this.log(`Analysis complete: ${suggestions.length} suggestions generated`, 'info');
+          }
+        } catch (error) {
+          this.log(`Error handling analyze event: ${error.message}`, 'error');
+
+          // Emit failure event
+          EventSystem.emit(EventTypes.ANALYSIS_FAILED, {
+            projectId: payload.projectId,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // Return to dormant state (no polling, just wait for next event)
+        this.log('Analysis complete, returning to dormant state', 'info');
+      },
+      { priority: 100 }
+    );
+
+    this.log('Event-driven mode initialized. Agent is dormant, waiting for events.', 'info');
+    this.log('Listening for events:', 'info');
+    this.log(`  - ${EventTypes.ANALYZE_PROJECT}`, 'info');
+  }
+
+  /**
+   * Shutdown event-driven mode
+   * Unregisters event listeners
+   */
+  shutdown() {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.log('Event listeners unregistered', 'info');
+    }
+  }
 }
 
 // Run agent if executed directly
@@ -261,7 +335,21 @@ if (require.main === module) {
   }
 
   const agent = new ProductImprovementAgent('http://localhost:3000', apiKey);
-  agent.run(60000); // Poll every 60 seconds
+
+  // EVENT-DRIVEN MODE: No polling, just event listeners
+  // This reduces API calls by ~95% compared to polling every 60 seconds
+  agent.initializeEventDriven();
+
+  // Keep process running
+  console.log('Product Improvement Agent running in event-driven mode');
+  console.log('Press Ctrl+C to exit');
+
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('\nShutting down gracefully...');
+    agent.shutdown();
+    process.exit(0);
+  });
 }
 
 module.exports = ProductImprovementAgent;

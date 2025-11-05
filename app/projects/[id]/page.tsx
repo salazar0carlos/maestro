@@ -104,26 +104,32 @@ function TaskCard() {
         }
       ];
 
-      const response = await fetch('/api/analyze', {
+      // EVENT-DRIVEN: Trigger event instead of direct API call
+      // This allows the system to handle the request asynchronously
+      const response = await fetch('/api/events/trigger', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          projectId: project.project_id,
-          files: demoFiles,
-          anthropicApiKey: apiKey,
+          eventType: 'analyze_project',
+          payload: {
+            projectId: project.project_id,
+            files: demoFiles,
+            anthropicApiKey: apiKey,
+            source: 'user_button_click',
+          },
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to analyze project');
+        throw new Error(error.message || 'Failed to trigger analysis');
       }
 
       const result = await response.json();
 
-      alert(`Analysis complete! Generated ${result.suggestionsCount} improvement suggestions.\n\nClick OK to view them.`);
+      alert(`Analysis started! ${result.message || 'You will be notified when complete.'}\n\nRedirecting to improvements page...`);
 
       // Redirect to improvements page
       window.location.href = '/improvements';
