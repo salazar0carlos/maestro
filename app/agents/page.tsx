@@ -1,16 +1,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Agent, Project } from '@/lib/types';
-import { getAgents, getProject, getTasks } from '@/lib/storage';
+import { Agent, Project, SystemHealth, Bottleneck } from '@/lib/types';
+import {
+  getAgents,
+  getProject,
+  getTasks,
+  calculateSystemHealth,
+  detectBottlenecks
+} from '@/lib/storage';
 import { Card } from '@/components/Card';
+import { AlertCircle } from 'lucide-react';
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [projectMap, setProjectMap] = useState<Record<string, Project>>({});
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    loadData();
+
+    // Set up polling for real-time updates every 30 seconds
+    const interval = setInterval(loadData, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadData = () => {
     const loaded = getAgents();
     setAgents(loaded);
 
@@ -23,8 +41,15 @@ export default function AgentsPage() {
       }
     });
     setProjectMap(map);
+
+    // Calculate system health
+    setSystemHealth(calculateSystemHealth());
+
+    // Detect bottlenecks
+    setBottlenecks(detectBottlenecks());
+
     setIsLoading(false);
-  }, []);
+  };
 
   const getAgentStats = (agentId: string) => {
     const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
@@ -55,8 +80,23 @@ export default function AgentsPage() {
     );
   }
 
+  const getHealthColor = (percentage: number) => {
+    if (percentage >= 80) return 'text-green-400';
+    if (percentage >= 50) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'high': return 'border-red-600 bg-red-950';
+      case 'medium': return 'border-orange-600 bg-orange-950';
+      case 'low': return 'border-yellow-600 bg-yellow-950';
+      default: return 'border-slate-600 bg-slate-900';
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-50 mb-2">Agent Monitor</h1>
@@ -64,6 +104,72 @@ export default function AgentsPage() {
           {agents.length} agent{agents.length !== 1 ? 's' : ''} across all projects
         </p>
       </div>
+
+      {/* System Health Card */}
+      {systemHealth && (
+        <Card className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-slate-50">System Health</h2>
+            <div className={`text-4xl font-bold ${getHealthColor(systemHealth.health_percentage)}`}>
+              {systemHealth.health_percentage}%
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-green-950 border border-green-800 rounded-lg">
+              <div className="text-2xl font-bold text-green-400">{systemHealth.healthy}</div>
+              <div className="text-sm text-green-300">Healthy</div>
+            </div>
+            <div className="text-center p-4 bg-yellow-950 border border-yellow-800 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-400">{systemHealth.stuck}</div>
+              <div className="text-sm text-yellow-300">Idle</div>
+            </div>
+            <div className="text-center p-4 bg-red-950 border border-red-800 rounded-lg">
+              <div className="text-2xl font-bold text-red-400">{systemHealth.offline}</div>
+              <div className="text-sm text-red-300">Offline</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Bottleneck Alerts */}
+      {bottlenecks.length > 0 && (
+        <Card className="mb-6 border-orange-600 bg-orange-950">
+          <div className="flex items-start gap-3 mb-4">
+            <AlertCircle className="text-orange-400 mt-1" size={24} />
+            <div>
+              <h3 className="text-lg font-bold text-orange-400 mb-1">
+                Bottlenecks Detected
+              </h3>
+              <p className="text-sm text-orange-200">
+                {bottlenecks.length} agent{bottlenecks.length !== 1 ? 's need' : ' needs'} attention
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {bottlenecks.map((bottleneck, index) => (
+              <div
+                key={`${bottleneck.agent_id}-${index}`}
+                className={`p-4 rounded-lg border ${getSeverityColor(bottleneck.severity)}`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-bold text-slate-50">{bottleneck.agent_type}</div>
+                    <div className="text-xs text-slate-400">{bottleneck.agent_id}</div>
+                  </div>
+                  <div className="px-2 py-1 bg-slate-800 rounded text-xs font-medium text-slate-300 uppercase">
+                    {bottleneck.severity}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-300 mb-2">{bottleneck.issue}</p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">Recommended:</span>
+                  <span className="text-slate-300">{bottleneck.recommended_action}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Agents Table */}
       {agents.length === 0 ? (

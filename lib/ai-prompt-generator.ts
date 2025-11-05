@@ -5,7 +5,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM_PROMPT = `You are an expert at generating detailed, executable prompts for AI agents building applications.
+// System prompt is used by the API route, exported for use in server-side code
+export const SYSTEM_PROMPT = `You are an expert at generating detailed, executable prompts for AI agents building applications.
 
 Given a simple task title and optional description, generate a comprehensive prompt that includes:
 
@@ -53,7 +54,7 @@ let client: Anthropic | null = null;
 /**
  * Initialize Anthropic client with API key from environment or localStorage
  */
-function getClient(): Anthropic {
+export function getClient(): Anthropic {
   if (client) return client;
 
   let apiKey = process.env.ANTHROPIC_API_KEY;

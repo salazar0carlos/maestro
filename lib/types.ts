@@ -86,3 +86,49 @@ export interface ApiError {
   message: string;
   status: number;
 }
+
+/**
+ * Improvement suggestion status
+ */
+export type SuggestionStatus = 'pending' | 'approved' | 'rejected' | 'implemented';
+
+/**
+ * Improvement suggestion created by Product Improvement Agent
+ */
+export interface ImprovementSuggestion {
+  suggestion_id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  reasoning: string;
+  impact_score: 1 | 2 | 3 | 4 | 5;
+  effort_estimate: 'low' | 'medium' | 'high';
+  status: SuggestionStatus;
+  created_date: string;
+  reviewed_date?: string;
+  reviewed_by?: string;
+}
+
+/**
+ * System health status from Supervisor Agent
+ */
+export interface SystemHealth {
+  total_agents: number;
+  healthy: number;
+  stuck: number;
+  offline: number;
+  health_percentage: number;
+  last_updated: string;
+}
+
+/**
+ * Bottleneck detection from Supervisor Agent
+ */
+export interface Bottleneck {
+  agent_type: string;
+  agent_id: string;
+  issue: string;
+  severity: 'low' | 'medium' | 'high';
+  stuck_duration_minutes: number;
+  recommended_action: string;
+}

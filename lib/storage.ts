@@ -4,12 +4,15 @@
  * Future: Easy migration to PostgreSQL by replacing this file
  */
 
-import { Project, MaestroTask, Agent } from './types';
+import { Project, MaestroTask, Agent, ImprovementSuggestion, SystemHealth, Bottleneck } from './types';
 
 const STORAGE_KEYS = {
   PROJECTS: 'maestro:projects',
   TASKS: 'maestro:tasks',
   AGENTS: 'maestro:agents',
+  SUGGESTIONS: 'maestro:suggestions',
+  SYSTEM_HEALTH: 'maestro:system_health',
+  BOTTLENECKS: 'maestro:bottlenecks',
 };
 
 /**
@@ -350,4 +353,203 @@ export function clearAllData(): void {
   localStorage.removeItem(STORAGE_KEYS.PROJECTS);
   localStorage.removeItem(STORAGE_KEYS.TASKS);
   localStorage.removeItem(STORAGE_KEYS.AGENTS);
+  localStorage.removeItem(STORAGE_KEYS.SUGGESTIONS);
+}
+
+// ============ IMPROVEMENT SUGGESTIONS STORAGE ============
+
+/**
+ * Get all improvement suggestions
+ */
+export function getSuggestions(): ImprovementSuggestion[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.SUGGESTIONS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get suggestions for a specific project
+ */
+export function getProjectSuggestions(projectId: string): ImprovementSuggestion[] {
+  return getSuggestions().filter(s => s.project_id === projectId);
+}
+
+/**
+ * Get suggestion by ID
+ */
+export function getSuggestion(suggestionId: string): ImprovementSuggestion | null {
+  const suggestions = getSuggestions();
+  return suggestions.find(s => s.suggestion_id === suggestionId) || null;
+}
+
+/**
+ * Get suggestions by status
+ */
+export function getSuggestionsByStatus(projectId: string, status: string): ImprovementSuggestion[] {
+  return getSuggestions().filter(
+    s => s.project_id === projectId && s.status === status
+  );
+}
+
+/**
+ * Create new suggestion
+ */
+export function createSuggestion(suggestion: ImprovementSuggestion): ImprovementSuggestion {
+  if (!isBrowser()) return suggestion;
+
+  const suggestions = getSuggestions();
+  suggestions.push(suggestion);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return suggestion;
+}
+
+/**
+ * Update suggestion
+ */
+export function updateSuggestion(
+  suggestionId: string,
+  updates: Partial<ImprovementSuggestion>
+): ImprovementSuggestion | null {
+  if (!isBrowser()) return null;
+
+  const suggestions = getSuggestions();
+  const index = suggestions.findIndex(s => s.suggestion_id === suggestionId);
+  if (index === -1) return null;
+
+  suggestions[index] = { ...suggestions[index], ...updates };
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return suggestions[index];
+}
+
+/**
+ * Delete suggestion
+ */
+export function deleteSuggestion(suggestionId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const suggestions = getSuggestions().filter(s => s.suggestion_id !== suggestionId);
+  localStorage.setItem(STORAGE_KEYS.SUGGESTIONS, safeJsonStringify(suggestions));
+
+  return true;
+}
+
+// ============ SUPERVISOR DATA STORAGE ============
+
+/**
+ * Calculate system health from current agents
+ */
+export function calculateSystemHealth(): SystemHealth {
+  const agents = getAgents();
+  const total = agents.length;
+
+  // Define health criteria
+  const healthy = agents.filter(a => a.status === 'active').length;
+  const stuck = agents.filter(a => a.status === 'idle').length;
+  const offline = agents.filter(a => a.status === 'offline').length;
+
+  const healthPercentage = total > 0 ? Math.round((healthy / total) * 100) : 100;
+
+  const systemHealth: SystemHealth = {
+    total_agents: total,
+    healthy,
+    stuck,
+    offline,
+    health_percentage: healthPercentage,
+    last_updated: new Date().toISOString(),
+  };
+
+  if (isBrowser()) {
+    localStorage.setItem(STORAGE_KEYS.SYSTEM_HEALTH, safeJsonStringify(systemHealth));
+  }
+
+  return systemHealth;
+}
+
+/**
+ * Get system health
+ */
+export function getSystemHealth(): SystemHealth {
+  if (!isBrowser()) {
+    return {
+      total_agents: 0,
+      healthy: 0,
+      stuck: 0,
+      offline: 0,
+      health_percentage: 100,
+      last_updated: new Date().toISOString(),
+    };
+  }
+
+  const data = localStorage.getItem(STORAGE_KEYS.SYSTEM_HEALTH);
+  if (!data) {
+    return calculateSystemHealth();
+  }
+  return safeJsonParse(data, calculateSystemHealth());
+}
+
+/**
+ * Detect bottlenecks from agent data
+ */
+export function detectBottlenecks(): Bottleneck[] {
+  const agents = getAgents();
+  const now = new Date().getTime();
+  const bottlenecks: Bottleneck[] = [];
+
+  agents.forEach(agent => {
+    // Check if agent is stuck (idle with tasks in progress)
+    if (agent.status === 'idle' && agent.tasks_in_progress > 0) {
+      const lastPollTime = agent.last_poll_date ? new Date(agent.last_poll_date).getTime() : 0;
+      const stuckMinutes = Math.round((now - lastPollTime) / (1000 * 60));
+
+      if (stuckMinutes > 10) {
+        bottlenecks.push({
+          agent_type: agent.agent_name,
+          agent_id: agent.agent_id,
+          issue: `Agent has ${agent.tasks_in_progress} task(s) in progress but has been idle for ${stuckMinutes} minutes`,
+          severity: stuckMinutes > 30 ? 'high' : stuckMinutes > 20 ? 'medium' : 'low',
+          stuck_duration_minutes: stuckMinutes,
+          recommended_action: 'Check agent logs and restart if necessary',
+        });
+      }
+    }
+
+    // Check if agent is offline with pending tasks
+    if (agent.status === 'offline') {
+      const tasks = getTasks().filter(
+        t => t.assigned_to_agent === agent.agent_id && t.status !== 'done'
+      );
+
+      if (tasks.length > 0) {
+        bottlenecks.push({
+          agent_type: agent.agent_name,
+          agent_id: agent.agent_id,
+          issue: `Agent is offline with ${tasks.length} pending task(s)`,
+          severity: 'high',
+          stuck_duration_minutes: 0,
+          recommended_action: 'Start agent or reassign tasks',
+        });
+      }
+    }
+  });
+
+  if (isBrowser()) {
+    localStorage.setItem(STORAGE_KEYS.BOTTLENECKS, safeJsonStringify(bottlenecks));
+  }
+
+  return bottlenecks;
+}
+
+/**
+ * Get detected bottlenecks
+ */
+export function getBottlenecks(): Bottleneck[] {
+  if (!isBrowser()) return [];
+
+  const data = localStorage.getItem(STORAGE_KEYS.BOTTLENECKS);
+  if (!data) {
+    return detectBottlenecks();
+  }
+  return safeJsonParse(data, []);
 }

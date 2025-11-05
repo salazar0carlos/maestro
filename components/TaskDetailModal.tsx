@@ -1,6 +1,7 @@
 'use client';
 
-import { MaestroTask, TaskStatus } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { MaestroTask, TaskStatus, TaskPriority } from '@/lib/types';
 import { Modal } from './Modal';
 import { Button } from './Button';
 
@@ -9,15 +10,10 @@ interface TaskDetailModalProps {
   onClose: () => void;
   task: MaestroTask;
   onStatusChange: (status: TaskStatus) => void;
+  onPriorityChange?: (priority: TaskPriority) => void;
+  onBlockedReasonChange?: (reason: string) => void;
   onDelete: () => void;
 }
-
-const STATUS_COLORS: Record<TaskStatus, string> = {
-  'todo': 'bg-slate-700 text-slate-300',
-  'in-progress': 'bg-blue-900 text-blue-200',
-  'done': 'bg-green-900 text-green-200',
-  'blocked': 'bg-red-900 text-red-200',
-};
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   'todo': 'To Do',
@@ -31,38 +27,99 @@ export default function TaskDetailModal({
   onClose,
   task,
   onStatusChange,
+  onPriorityChange,
+  onBlockedReasonChange,
   onDelete,
 }: TaskDetailModalProps) {
+  const [localStatus, setLocalStatus] = useState(task.status);
+  const [localPriority, setLocalPriority] = useState(task.priority);
+  const [localBlockedReason, setLocalBlockedReason] = useState(task.blocked_reason || '');
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setLocalStatus(task.status);
+    setLocalPriority(task.priority);
+    setLocalBlockedReason(task.blocked_reason || '');
+    setHasChanges(false);
+  }, [task]);
+
+  const handleStatusChange = (status: TaskStatus) => {
+    setLocalStatus(status);
+    setHasChanges(true);
+    // Optimistic update
+    onStatusChange(status);
+  };
+
+  const handlePriorityChange = (priority: TaskPriority) => {
+    setLocalPriority(priority);
+    setHasChanges(true);
+    if (onPriorityChange) {
+      onPriorityChange(priority);
+    }
+  };
+
+  const handleBlockedReasonChange = (reason: string) => {
+    setLocalBlockedReason(reason);
+    setHasChanges(true);
+  };
+
+  const handleSaveBlockedReason = () => {
+    if (onBlockedReasonChange && localBlockedReason.trim()) {
+      onBlockedReasonChange(localBlockedReason.trim());
+      setHasChanges(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={task.title}>
       <div className="space-y-4">
-        {/* Status and Priority */}
-        <div className="flex items-center gap-4">
+        {/* Status and Priority - Editable */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-slate-400 mb-1">Status</p>
-            <span className={`inline-block px-3 py-1 rounded text-sm font-medium ${STATUS_COLORS[task.status]}`}>
-              {STATUS_LABELS[task.status]}
-            </span>
+            <label htmlFor="status-select" className="block text-xs font-medium text-slate-400 mb-2">
+              Status
+            </label>
+            <select
+              id="status-select"
+              value={localStatus}
+              onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {(['todo', 'in-progress', 'done', 'blocked'] as TaskStatus[]).map(status => (
+                <option key={status} value={status}>
+                  {STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
-            <p className="text-xs text-slate-400 mb-1">Priority</p>
-            <span className={`inline-block px-3 py-1 rounded text-sm font-medium ${
-              task.priority === 1 || task.priority === 2
-                ? 'bg-red-900 text-red-200'
-                : task.priority === 3
-                ? 'bg-yellow-900 text-yellow-200'
-                : 'bg-green-900 text-green-200'
-            }`}>
-              P{task.priority}
-            </span>
+            <label htmlFor="priority-select" className="block text-xs font-medium text-slate-400 mb-2">
+              Priority
+            </label>
+            <select
+              id="priority-select"
+              value={localPriority}
+              onChange={(e) => handlePriorityChange(parseInt(e.target.value) as TaskPriority)}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {[1, 2, 3, 4, 5].map(p => (
+                <option key={p} value={p}>
+                  P{p} {p <= 2 ? '(High)' : p === 3 ? '(Medium)' : '(Low)'}
+                </option>
+              ))}
+            </select>
           </div>
-          <div>
-            <p className="text-xs text-slate-400 mb-1">Agent</p>
-            <span className="inline-block px-3 py-1 rounded text-sm font-medium bg-blue-900 text-blue-200">
-              {task.assigned_to_agent}
-            </span>
+        </div>
+
+        {/* Agent Info */}
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-2">
+            Assigned Agent
+          </label>
+          <div className="px-3 py-2 bg-slate-800 rounded text-sm text-slate-300">
+            {task.assigned_to_agent}
           </div>
         </div>
 
@@ -121,37 +178,30 @@ export default function TaskDetailModal({
           )}
         </div>
 
-        {/* Blocked Reason */}
-        {task.status === 'blocked' && task.blocked_reason && (
+        {/* Blocked Reason - Editable if status is blocked */}
+        {localStatus === 'blocked' && (
           <div className="bg-red-900/30 border border-red-800 rounded p-3">
-            <p className="text-xs text-red-300 font-medium mb-1">Blocked Reason</p>
-            <p className="text-red-200 text-sm">{task.blocked_reason}</p>
+            <label htmlFor="blocked-reason" className="block text-xs text-red-300 font-medium mb-2">
+              Blocked Reason
+            </label>
+            <textarea
+              id="blocked-reason"
+              value={localBlockedReason}
+              onChange={(e) => handleBlockedReasonChange(e.target.value)}
+              onBlur={handleSaveBlockedReason}
+              placeholder="Explain why this task is blocked..."
+              className="w-full px-3 py-2 bg-red-950 border border-red-800 rounded text-red-100 placeholder-red-400/50 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+              rows={3}
+            />
+            {hasChanges && localBlockedReason.trim() && (
+              <p className="text-xs text-red-300 mt-1">Changes will be saved automatically</p>
+            )}
           </div>
         )}
 
         {/* Actions */}
         <div className="space-y-3 pt-4 border-t border-slate-700">
-          <div>
-            <p className="text-xs text-slate-400 mb-2">Change Status</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(['todo', 'in-progress', 'done', 'blocked'] as TaskStatus[]).map(status => (
-                <button
-                  key={status}
-                  onClick={() => onStatusChange(status)}
-                  disabled={task.status === status}
-                  className={`px-3 py-2 rounded text-sm font-medium transition ${
-                    task.status === status
-                      ? 'opacity-50 cursor-not-allowed ' + STATUS_COLORS[status]
-                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-slate-100'
-                  }`}
-                >
-                  {STATUS_LABELS[status]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2">
             <Button
               variant="ghost"
               onClick={onClose}
@@ -161,10 +211,14 @@ export default function TaskDetailModal({
             </Button>
             <Button
               variant="danger"
-              onClick={onDelete}
+              onClick={() => {
+                if (confirm('Are you sure you want to delete this task?')) {
+                  onDelete();
+                }
+              }}
               className="flex-1"
             >
-              Delete
+              Delete Task
             </Button>
           </div>
         </div>
