@@ -25,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.16.0",
     "@bull-board/api": "^6.14.0",
     "@bull-board/express": "^6.14.0",
+    "@supabase/supabase-js": "^2.79.0",
     "bullmq": "^5.63.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
