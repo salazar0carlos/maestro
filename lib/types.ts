@@ -86,3 +86,65 @@ export interface ApiError {
   message: string;
   status: number;
 }
+
+/**
+ * Integration types for Maestro Intelligence Layer
+ */
+
+// Agent Communication
+export type MessageType =
+  | 'task_complete'
+  | 'need_info'
+  | 'context_share'
+  | 'dependency_alert'
+  | 'error_report'
+  | 'status_update';
+
+export interface AgentMessage {
+  id: string;
+  from: string;
+  to: string;
+  type: MessageType;
+  payload: Record<string, any>;
+  timestamp: string;
+  read: boolean;
+  priority?: 'low' | 'medium' | 'high';
+}
+
+// Knowledge Base
+export interface KnowledgeEntry {
+  id: string;
+  agent: string;
+  topic: string;
+  content: string;
+  type: 'learning' | 'pattern' | 'solution' | 'insight' | 'warning';
+  tags: string[];
+  timestamp: string;
+  project_id?: string;
+  task_id?: string;
+  confidence?: 'low' | 'medium' | 'high';
+  verified?: boolean;
+  usageCount?: number;
+}
+
+// Integration Health
+export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'offline';
+
+export interface IntegrationHealthStatus {
+  integration: string;
+  status: HealthStatus;
+  message?: string;
+  details?: Record<string, any>;
+  last_check: string;
+  last_success?: string;
+  error_rate?: number;
+  response_time?: number;
+}
+
+// Task Dependencies
+export interface TaskDependency {
+  task: string;
+  depends_on: string;
+  reason: string;
+  type: 'explicit' | 'inferred';
+}
