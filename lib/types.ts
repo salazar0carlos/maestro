@@ -207,3 +207,39 @@ export interface AgentMetrics {
     estimated_cost_today_usd: number;
   };
 }
+
+/**
+ * Message priority levels
+ */
+export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent';
+
+/**
+ * Message types for agent communication
+ */
+export type MessageType =
+  | 'task_assignment'
+  | 'task_complete'
+  | 'request_help'
+  | 'status_update'
+  | 'error_report'
+  | 'coordination'
+  | 'info';
+
+/**
+ * Agent-to-agent message
+ */
+export interface AgentMessage {
+  message_id: string;
+  from_agent_id: string;
+  from_agent_name: string;
+  to_agent_id: string;
+  to_agent_name: string;
+  message_type: MessageType;
+  priority: MessagePriority;
+  subject: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  read: boolean;
+  created_at: string;
+  read_at?: string;
+}

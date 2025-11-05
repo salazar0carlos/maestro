@@ -34,6 +34,9 @@ export default function RootLayout({
                     <Link href="/agents" className="text-sm text-slate-300 hover:text-blue-400 transition">
                       Agents
                     </Link>
+                    <Link href="/messages" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                      Messages
+                    </Link>
                     <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">
                       Improvements
                     </Link>

@@ -13,7 +13,8 @@ import {
   Bottleneck,
   Notification,
   EventResult,
-  AgentMetrics
+  AgentMetrics,
+  AgentMessage
 } from './types';
 
 const STORAGE_KEYS = {
@@ -26,6 +27,7 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'maestro:notifications',
   EVENT_RESULTS: 'maestro:event_results',
   AGENT_METRICS: 'maestro:agent_metrics',
+  MESSAGES: 'maestro:messages',
 };
 
 /**
@@ -784,4 +786,128 @@ export function resetDailyMetrics(): void {
   });
 
   localStorage.setItem(STORAGE_KEYS.AGENT_METRICS, safeJsonStringify(metrics));
+}
+
+// ============ AGENT MESSAGES STORAGE ============
+
+/**
+ * Get all agent messages
+ */
+export function getMessages(): AgentMessage[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.MESSAGES);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get messages sent by a specific agent
+ */
+export function getMessagesSentBy(agentId: string): AgentMessage[] {
+  return getMessages().filter(m => m.from_agent_id === agentId);
+}
+
+/**
+ * Get messages received by a specific agent
+ */
+export function getMessagesReceivedBy(agentId: string): AgentMessage[] {
+  return getMessages().filter(m => m.to_agent_id === agentId);
+}
+
+/**
+ * Get conversation between two agents
+ */
+export function getConversation(agent1Id: string, agent2Id: string): AgentMessage[] {
+  return getMessages()
+    .filter(m =>
+      (m.from_agent_id === agent1Id && m.to_agent_id === agent2Id) ||
+      (m.from_agent_id === agent2Id && m.to_agent_id === agent1Id)
+    )
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+/**
+ * Get unread messages for an agent
+ */
+export function getUnreadMessages(agentId: string): AgentMessage[] {
+  return getMessages().filter(m => m.to_agent_id === agentId && !m.read);
+}
+
+/**
+ * Create a new message
+ */
+export function createMessage(message: AgentMessage): AgentMessage {
+  if (!isBrowser()) return message;
+
+  const messages = getMessages();
+  messages.unshift(message); // Add to beginning (newest first)
+
+  // Keep only last 500 messages
+  const trimmed = messages.slice(0, 500);
+  localStorage.setItem(STORAGE_KEYS.MESSAGES, safeJsonStringify(trimmed));
+
+  return message;
+}
+
+/**
+ * Mark message as read
+ */
+export function markMessageRead(messageId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const messages = getMessages();
+  const message = messages.find(m => m.message_id === messageId);
+
+  if (!message) return false;
+
+  message.read = true;
+  message.read_at = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEYS.MESSAGES, safeJsonStringify(messages));
+
+  return true;
+}
+
+/**
+ * Delete message
+ */
+export function deleteMessage(messageId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const messages = getMessages().filter(m => m.message_id !== messageId);
+  localStorage.setItem(STORAGE_KEYS.MESSAGES, safeJsonStringify(messages));
+
+  return true;
+}
+
+/**
+ * Clear all messages
+ */
+export function clearAllMessages(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+}
+
+/**
+ * Get message statistics
+ */
+export function getMessageStats() {
+  const messages = getMessages();
+  return {
+    total: messages.length,
+    unread: messages.filter(m => !m.read).length,
+    byType: {
+      task_assignment: messages.filter(m => m.message_type === 'task_assignment').length,
+      task_complete: messages.filter(m => m.message_type === 'task_complete').length,
+      request_help: messages.filter(m => m.message_type === 'request_help').length,
+      status_update: messages.filter(m => m.message_type === 'status_update').length,
+      error_report: messages.filter(m => m.message_type === 'error_report').length,
+      coordination: messages.filter(m => m.message_type === 'coordination').length,
+      info: messages.filter(m => m.message_type === 'info').length,
+    },
+    byPriority: {
+      urgent: messages.filter(m => m.priority === 'urgent').length,
+      high: messages.filter(m => m.priority === 'high').length,
+      normal: messages.filter(m => m.priority === 'normal').length,
+      low: messages.filter(m => m.priority === 'low').length,
+    },
+  };
 }
