@@ -1,63 +1,116 @@
-/**
- * Testing Agent - Webhook Version
- * Specializes in testing, QA, test automation
- * Event-driven - triggered by webhooks, dormant when idle
- */
+#!/usr/bin/env node
 
-const WebhookAgent = require('./agent-webhook-base');
+const { Worker } = require('bullmq');
+const Anthropic = require('@anthropic-ai/sdk');
+require('dotenv').config();
 
-class TestingWebhookAgent extends WebhookAgent {
-  constructor(maestroUrl = 'http://localhost:3000', anthropicApiKey = '') {
-    super('testing-agent', 'Testing', maestroUrl, anthropicApiKey);
-  }
+const AGENT_TYPE = 'Testing';
+const QUEUE_NAME = 'maestro-testing';
+const API_KEY = process.env.ANTHROPIC_API_KEY;
 
-  /**
-   * Override system prompt with testing-specific context
-   */
-  getSystemPrompt() {
-    return `You are a Testing & QA Agent for Maestro.
+if (!API_KEY) {
+  console.error('[Testing Agent] ERROR: ANTHROPIC_API_KEY not set');
+  process.exit(1);
+}
 
-Your expertise:
-- Unit testing (Jest, Vitest)
-- Integration testing
-- End-to-end testing (Cypress, Playwright)
-- Test-driven development (TDD)
-- Code coverage analysis
-- Performance testing
-- Accessibility testing
+const anthropic = new Anthropic({ apiKey: API_KEY });
 
-When writing tests:
-1. Follow AAA pattern (Arrange, Act, Assert)
-2. Write descriptive test names
-3. Test edge cases and error scenarios
-4. Aim for high code coverage (>80%)
-5. Mock external dependencies appropriately
-6. Ensure tests are deterministic and isolated
-7. Write maintainable, readable tests
+const redisConnection = {
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: null,
+};
 
-Provide comprehensive test suites with:
+console.log(`[${AGENT_TYPE} Agent] Starting worker...`);
+console.log(`[${AGENT_TYPE} Agent] Queue: ${QUEUE_NAME}`);
+
+const worker = new Worker(
+  QUEUE_NAME,
+  async (job) => {
+    const { task } = job.data;
+
+    console.log(`\n[${AGENT_TYPE} Agent] 🔨 Processing task: ${task.task_id}`);
+    console.log(`[${AGENT_TYPE} Agent] Title: ${task.title}`);
+
+    try {
+      await updateTaskStatus(task.task_id, 'in-progress');
+
+      const prompt = `You are a Testing Agent specialized in writing comprehensive tests.
+
+Task: ${task.title}
+${task.description ? `Description: ${task.description}` : ''}
+
+${task.ai_prompt || 'Please create comprehensive tests for this functionality.'}
+
+Provide:
+- Unit tests with high coverage
+- Integration tests where applicable
+- Edge cases and error scenarios
 - Clear test descriptions
-- Proper setup and teardown
-- Edge case coverage
-- Error scenario testing
-- Performance assertions
-- Inline comments for complex test logic`;
+- Mock data and fixtures as needed
+`;
+
+      console.log(`[${AGENT_TYPE} Agent] 🤖 Calling Claude API...`);
+
+      const message = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const response = message.content[0].text;
+
+      console.log(`[${AGENT_TYPE} Agent] ✅ Task completed`);
+      console.log(`[${AGENT_TYPE} Agent] Response preview: ${response.substring(0, 200)}...`);
+
+      await updateTaskStatus(task.task_id, 'done', response);
+
+      return { success: true, response };
+
+    } catch (error) {
+      console.error(`[${AGENT_TYPE} Agent] ❌ Error:`, error.message);
+      await updateTaskStatus(task.task_id, 'blocked', null, error.message);
+      throw error;
+    }
+  },
+  { connection: redisConnection, concurrency: 1 }
+);
+
+async function updateTaskStatus(taskId, status, aiResponse = null, blockedReason = null) {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    const body = { status };
+    if (aiResponse) body.ai_response = aiResponse;
+    if (blockedReason) body.blocked_reason = blockedReason;
+
+    const response = await fetch(`${apiUrl}/api/tasks/${taskId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(`[${AGENT_TYPE} Agent] Failed to update task status`);
+    }
+  } catch (error) {
+    console.error(`[${AGENT_TYPE} Agent] Error updating task status:`, error.message);
   }
 }
 
-// Run agent if executed directly
-if (require.main === module) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || '';
-  const maestroUrl = process.env.MAESTRO_URL || 'http://localhost:3000';
-  const port = parseInt(process.env.PORT || '3003', 10);
+worker.on('completed', (job) => console.log(`[${AGENT_TYPE} Agent] ✓ Job ${job.id} completed`));
+worker.on('failed', (job, err) => console.error(`[${AGENT_TYPE} Agent] ✗ Job ${job?.id} failed:`, err.message));
+worker.on('error', (err) => console.error(`[${AGENT_TYPE} Agent] Worker error:`, err));
 
-  if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable not set');
-    process.exit(1);
-  }
+process.on('SIGTERM', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Shutting down...`);
+  await worker.close();
+  process.exit(0);
+});
 
-  const agent = new TestingWebhookAgent(maestroUrl, apiKey);
-  agent.startWebhookServer(port);
-}
+process.on('SIGINT', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Shutting down...`);
+  await worker.close();
+  process.exit(0);
+});
 
-module.exports = TestingWebhookAgent;
+console.log(`[${AGENT_TYPE} Agent] ✓ Worker started successfully, waiting for jobs...`);

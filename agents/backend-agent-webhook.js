@@ -1,63 +1,116 @@
-/**
- * Backend Agent - Webhook Version
- * Specializes in APIs, databases, server logic, Node.js
- * Event-driven - triggered by webhooks, dormant when idle
- */
+#!/usr/bin/env node
 
-const WebhookAgent = require('./agent-webhook-base');
+const { Worker } = require('bullmq');
+const Anthropic = require('@anthropic-ai/sdk');
+require('dotenv').config();
 
-class BackendWebhookAgent extends WebhookAgent {
-  constructor(maestroUrl = 'http://localhost:3000', anthropicApiKey = '') {
-    super('backend-agent', 'Backend', maestroUrl, anthropicApiKey);
-  }
+const AGENT_TYPE = 'Backend';
+const QUEUE_NAME = 'maestro-backend';
+const API_KEY = process.env.ANTHROPIC_API_KEY;
 
-  /**
-   * Override system prompt with backend-specific context
-   */
-  getSystemPrompt() {
-    return `You are a Backend Development Agent for Maestro.
+if (!API_KEY) {
+  console.error('[Backend Agent] ERROR: ANTHROPIC_API_KEY not set');
+  process.exit(1);
+}
 
-Your expertise:
-- Node.js & TypeScript server development
-- RESTful API design and implementation
-- Database design (SQL & NoSQL)
-- Authentication & authorization
-- API security (input validation, sanitization, rate limiting)
-- Error handling and logging
-- Performance optimization
+const anthropic = new Anthropic({ apiKey: API_KEY });
 
-When building backend features:
-1. Design clean, RESTful APIs
-2. Implement proper error handling with meaningful status codes
-3. Validate and sanitize all inputs
-4. Use TypeScript for type safety
-5. Follow security best practices (OWASP guidelines)
-6. Write efficient database queries
-7. Implement proper logging
+const redisConnection = {
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: null,
+};
 
-Provide production-ready code with:
-- Clear API endpoint structure
-- Comprehensive error handling
-- Input validation
-- Security considerations
-- Performance optimization
-- Inline documentation`;
+console.log(`[${AGENT_TYPE} Agent] Starting worker...`);
+console.log(`[${AGENT_TYPE} Agent] Queue: ${QUEUE_NAME}`);
+
+const worker = new Worker(
+  QUEUE_NAME,
+  async (job) => {
+    const { task } = job.data;
+
+    console.log(`\n[${AGENT_TYPE} Agent] 🔨 Processing task: ${task.task_id}`);
+    console.log(`[${AGENT_TYPE} Agent] Title: ${task.title}`);
+
+    try {
+      await updateTaskStatus(task.task_id, 'in-progress');
+
+      const prompt = `You are a Backend Development Agent specialized in APIs, databases, and server-side logic.
+
+Task: ${task.title}
+${task.description ? `Description: ${task.description}` : ''}
+
+${task.ai_prompt || 'Please complete this task with high-quality backend code and best practices.'}
+
+Provide a detailed implementation with:
+- Robust API design
+- Proper error handling and validation
+- Database optimization where applicable
+- Security best practices
+- Clear documentation
+`;
+
+      console.log(`[${AGENT_TYPE} Agent] 🤖 Calling Claude API...`);
+
+      const message = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const response = message.content[0].text;
+
+      console.log(`[${AGENT_TYPE} Agent] ✅ Task completed`);
+      console.log(`[${AGENT_TYPE} Agent] Response preview: ${response.substring(0, 200)}...`);
+
+      await updateTaskStatus(task.task_id, 'done', response);
+
+      return { success: true, response };
+
+    } catch (error) {
+      console.error(`[${AGENT_TYPE} Agent] ❌ Error:`, error.message);
+      await updateTaskStatus(task.task_id, 'blocked', null, error.message);
+      throw error;
+    }
+  },
+  { connection: redisConnection, concurrency: 2 }
+);
+
+async function updateTaskStatus(taskId, status, aiResponse = null, blockedReason = null) {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    const body = { status };
+    if (aiResponse) body.ai_response = aiResponse;
+    if (blockedReason) body.blocked_reason = blockedReason;
+
+    const response = await fetch(`${apiUrl}/api/tasks/${taskId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(`[${AGENT_TYPE} Agent] Failed to update task status`);
+    }
+  } catch (error) {
+    console.error(`[${AGENT_TYPE} Agent] Error updating task status:`, error.message);
   }
 }
 
-// Run agent if executed directly
-if (require.main === module) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || '';
-  const maestroUrl = process.env.MAESTRO_URL || 'http://localhost:3000';
-  const port = parseInt(process.env.PORT || '3002', 10);
+worker.on('completed', (job) => console.log(`[${AGENT_TYPE} Agent] ✓ Job ${job.id} completed`));
+worker.on('failed', (job, err) => console.error(`[${AGENT_TYPE} Agent] ✗ Job ${job?.id} failed:`, err.message));
+worker.on('error', (err) => console.error(`[${AGENT_TYPE} Agent] Worker error:`, err));
 
-  if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable not set');
-    process.exit(1);
-  }
+process.on('SIGTERM', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Shutting down...`);
+  await worker.close();
+  process.exit(0);
+});
 
-  const agent = new BackendWebhookAgent(maestroUrl, apiKey);
-  agent.startWebhookServer(port);
-}
+process.on('SIGINT', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Shutting down...`);
+  await worker.close();
+  process.exit(0);
+});
 
-module.exports = BackendWebhookAgent;
+console.log(`[${AGENT_TYPE} Agent] ✓ Worker started successfully, waiting for jobs...`);

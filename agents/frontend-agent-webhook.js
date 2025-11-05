@@ -1,60 +1,155 @@
+#!/usr/bin/env node
+
 /**
- * Frontend Agent - Webhook Version
- * Specializes in UI/UX, React, Next.js, Tailwind, TypeScript
- * Event-driven - triggered by webhooks, dormant when idle
+ * Frontend Agent Worker
+ *
+ * Processes frontend-related tasks from BullMQ queue:
+ * - UI components
+ * - React development
+ * - Styling and CSS
+ * - Frontend architecture
  */
 
-const WebhookAgent = require('./agent-webhook-base');
+const { Worker } = require('bullmq');
+const Anthropic = require('@anthropic-ai/sdk');
+require('dotenv').config();
 
-class FrontendWebhookAgent extends WebhookAgent {
-  constructor(maestroUrl = 'http://localhost:3000', anthropicApiKey = '') {
-    super('frontend-agent', 'Frontend', maestroUrl, anthropicApiKey);
+const AGENT_TYPE = 'Frontend';
+const QUEUE_NAME = 'maestro-frontend';
+const API_KEY = process.env.ANTHROPIC_API_KEY;
+
+if (!API_KEY) {
+  console.error('[Frontend Agent] ERROR: ANTHROPIC_API_KEY not set');
+  process.exit(1);
+}
+
+const anthropic = new Anthropic({ apiKey: API_KEY });
+
+// Redis connection configuration
+const redisConnection = {
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  maxRetriesPerRequest: null,
+};
+
+console.log(`[${AGENT_TYPE} Agent] Starting worker...`);
+console.log(`[${AGENT_TYPE} Agent] Queue: ${QUEUE_NAME}`);
+console.log(`[${AGENT_TYPE} Agent] Redis: ${redisConnection.host}:${redisConnection.port}`);
+
+// Create worker
+const worker = new Worker(
+  QUEUE_NAME,
+  async (job) => {
+    const { task } = job.data;
+
+    console.log(`\n[${AGENT_TYPE} Agent] 🔨 Processing task: ${task.task_id}`);
+    console.log(`[${AGENT_TYPE} Agent] Title: ${task.title}`);
+
+    try {
+      // Update task status to in-progress
+      await updateTaskStatus(task.task_id, 'in-progress');
+
+      // Build prompt for Claude
+      const prompt = buildPrompt(task);
+
+      console.log(`[${AGENT_TYPE} Agent] 🤖 Calling Claude API...`);
+
+      // Call Claude API
+      const message = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const response = message.content[0].text;
+
+      console.log(`[${AGENT_TYPE} Agent] ✅ Task completed`);
+      console.log(`[${AGENT_TYPE} Agent] Response preview: ${response.substring(0, 200)}...`);
+
+      // Update task status to done with AI response
+      await updateTaskStatus(task.task_id, 'done', response);
+
+      return { success: true, response };
+
+    } catch (error) {
+      console.error(`[${AGENT_TYPE} Agent] ❌ Error processing task:`, error.message);
+
+      // Update task status to blocked
+      await updateTaskStatus(task.task_id, 'blocked', null, error.message);
+
+      throw error;
+    }
+  },
+  {
+    connection: redisConnection,
+    concurrency: 2,
   }
+);
 
-  /**
-   * Override system prompt with frontend-specific context
-   */
-  getSystemPrompt() {
-    return `You are a Frontend Development Agent for Maestro.
+function buildPrompt(task) {
+  return `You are a Frontend Development Agent specialized in UI, React, and styling.
 
-Your expertise:
-- React & Next.js (App Router, Server Components, Client Components)
-- TypeScript (strict mode, type safety)
-- Tailwind CSS (utility-first styling, responsive design)
-- Modern UI/UX patterns
-- Component architecture
-- Accessibility (WCAG 2.1)
-- Performance optimization
+Task: ${task.title}
+${task.description ? `Description: ${task.description}` : ''}
 
-When building UI:
-1. Use TypeScript with strict typing
-2. Follow component composition patterns
-3. Implement responsive design (mobile-first)
-4. Ensure accessibility (semantic HTML, ARIA labels, keyboard navigation)
-5. Use Tailwind CSS for styling
-6. Optimize for performance (lazy loading, code splitting)
+${task.ai_prompt || 'Please complete this task with high-quality frontend code and best practices.'}
 
-Provide clean, production-ready code with:
-- Clear component structure
-- Proper TypeScript types
-- Comprehensive error handling
-- Inline documentation for complex logic`;
+Provide a detailed implementation with:
+- Clean, well-structured code
+- Best practices for React/frontend development
+- Proper error handling
+- Comments explaining key decisions
+`;
+}
+
+async function updateTaskStatus(taskId, status, aiResponse = null, blockedReason = null) {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    const url = `${apiUrl}/api/tasks/${taskId}/status`;
+
+    const body = { status };
+    if (aiResponse) body.ai_response = aiResponse;
+    if (blockedReason) body.blocked_reason = blockedReason;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(`[${AGENT_TYPE} Agent] Failed to update task status:`, await response.text());
+    }
+  } catch (error) {
+    console.error(`[${AGENT_TYPE} Agent] Error updating task status:`, error.message);
   }
 }
 
-// Run agent if executed directly
-if (require.main === module) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || '';
-  const maestroUrl = process.env.MAESTRO_URL || 'http://localhost:3000';
-  const port = parseInt(process.env.PORT || '3001', 10);
+worker.on('completed', (job) => {
+  console.log(`[${AGENT_TYPE} Agent] ✓ Job ${job.id} completed successfully`);
+});
 
-  if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable not set');
-    process.exit(1);
-  }
+worker.on('failed', (job, err) => {
+  console.error(`[${AGENT_TYPE} Agent] ✗ Job ${job?.id} failed:`, err.message);
+});
 
-  const agent = new FrontendWebhookAgent(maestroUrl, apiKey);
-  agent.startWebhookServer(port);
-}
+worker.on('error', (err) => {
+  console.error(`[${AGENT_TYPE} Agent] Worker error:`, err);
+});
 
-module.exports = FrontendWebhookAgent;
+process.on('SIGTERM', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Received SIGTERM, shutting down gracefully...`);
+  await worker.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log(`\n[${AGENT_TYPE} Agent] Received SIGINT, shutting down gracefully...`);
+  await worker.close();
+  process.exit(0);
+});
+
+console.log(`[${AGENT_TYPE} Agent] ✓ Worker started successfully, waiting for jobs...`);
