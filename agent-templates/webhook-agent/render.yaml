@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: maestro-agent
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MAESTRO_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: AGENT_ID
+        sync: false
+      - key: AGENT_NAME
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-3-5-haiku-20241022
