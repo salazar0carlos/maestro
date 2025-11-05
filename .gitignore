@@ -49,3 +49,4 @@ logs/
 # Compiled workers
 workers/lib/
 workers/workers/
+dump.rdb
