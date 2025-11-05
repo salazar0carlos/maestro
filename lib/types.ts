@@ -6,6 +6,7 @@ export type ProjectStatus = 'active' | 'paused' | 'complete';
 export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 export type AgentStatus = 'active' | 'idle' | 'offline';
 export type TaskPriority = 1 | 2 | 3 | 4 | 5;
+export type ImprovementStatus = 'pending' | 'approved' | 'rejected' | 'implemented';
 
 /**
  * Project representing an autonomous app being built by agents
@@ -85,4 +86,23 @@ export interface ApiError {
   error: string;
   message: string;
   status: number;
+}
+
+/**
+ * Improvement suggestion from agents or automated analysis
+ */
+export interface ImprovementSuggestion {
+  improvement_id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  suggested_by: string; // agent_id or 'system'
+  status: ImprovementStatus;
+  priority: TaskPriority;
+  estimated_impact: 'low' | 'medium' | 'high';
+  created_date: string;
+  reviewed_date?: string;
+  reviewed_by?: string;
+  rejection_reason?: string;
+  converted_to_task_id?: string;
 }
