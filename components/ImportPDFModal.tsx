@@ -30,7 +30,6 @@ export default function ImportPDFModal({
 }: ImportPDFModalProps) {
   const [step, setStep] = useState<Step>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [pdfBase64, setPdfBase64] = useState('');
   const [parsedProjects, setParsedProjects] = useState<ParsedProject[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
@@ -102,7 +101,6 @@ export default function ImportPDFModal({
       reader.onload = async (event) => {
         try {
           const base64String = (event.target?.result as string)?.split(',')[1] || '';
-          setPdfBase64(base64String);
 
           // Get API key from localStorage
           const apiKey = localStorage.getItem('anthropic_api_key') || '';
@@ -174,7 +172,6 @@ export default function ImportPDFModal({
 
     // Reset form
     setSelectedFile(null);
-    setPdfBase64('');
     setParsedProjects([]);
     setSelectedProjects(new Set());
     setStep('upload');

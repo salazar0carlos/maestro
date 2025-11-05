@@ -4,12 +4,13 @@
  * Future: Easy migration to PostgreSQL by replacing this file
  */
 
-import { Project, MaestroTask, Agent } from './types';
+import { Project, MaestroTask, Agent, ImprovementSuggestion } from './types';
 
 const STORAGE_KEYS = {
   PROJECTS: 'maestro:projects',
   TASKS: 'maestro:tasks',
   AGENTS: 'maestro:agents',
+  IMPROVEMENTS: 'maestro:improvements',
 };
 
 /**
@@ -350,4 +351,91 @@ export function clearAllData(): void {
   localStorage.removeItem(STORAGE_KEYS.PROJECTS);
   localStorage.removeItem(STORAGE_KEYS.TASKS);
   localStorage.removeItem(STORAGE_KEYS.AGENTS);
+  localStorage.removeItem(STORAGE_KEYS.IMPROVEMENTS);
+}
+
+// ============ IMPROVEMENT SUGGESTIONS STORAGE ============
+
+/**
+ * Get all improvement suggestions
+ */
+export function getImprovements(): ImprovementSuggestion[] {
+  if (!isBrowser()) return [];
+  const data = localStorage.getItem(STORAGE_KEYS.IMPROVEMENTS);
+  return safeJsonParse(data, []);
+}
+
+/**
+ * Get improvement by ID
+ */
+export function getImprovement(improvementId: string): ImprovementSuggestion | null {
+  const improvements = getImprovements();
+  return improvements.find(i => i.improvement_id === improvementId) || null;
+}
+
+/**
+ * Get improvements for a project
+ */
+export function getProjectImprovements(projectId: string): ImprovementSuggestion[] {
+  return getImprovements().filter(i => i.project_id === projectId);
+}
+
+/**
+ * Get improvements by status
+ */
+export function getImprovementsByStatus(
+  projectId: string,
+  status: string
+): ImprovementSuggestion[] {
+  return getImprovements().filter(
+    i => i.project_id === projectId && i.status === status
+  );
+}
+
+/**
+ * Create improvement suggestion
+ */
+export function createImprovement(
+  improvement: ImprovementSuggestion
+): ImprovementSuggestion {
+  if (!isBrowser()) return improvement;
+
+  const improvements = getImprovements();
+  improvements.push(improvement);
+  localStorage.setItem(STORAGE_KEYS.IMPROVEMENTS, safeJsonStringify(improvements));
+
+  return improvement;
+}
+
+/**
+ * Update improvement
+ */
+export function updateImprovement(
+  improvementId: string,
+  updates: Partial<ImprovementSuggestion>
+): ImprovementSuggestion | null {
+  if (!isBrowser()) return null;
+
+  const improvements = getImprovements();
+  const index = improvements.findIndex(i => i.improvement_id === improvementId);
+  if (index === -1) return null;
+
+  improvements[index] = { ...improvements[index], ...updates };
+  localStorage.setItem(STORAGE_KEYS.IMPROVEMENTS, safeJsonStringify(improvements));
+
+  return improvements[index];
+}
+
+/**
+ * Delete improvement
+ */
+export function deleteImprovement(improvementId: string): boolean {
+  if (!isBrowser()) return false;
+
+  const improvements = getImprovements().filter(
+    i => i.improvement_id !== improvementId
+  );
+  localStorage.setItem(STORAGE_KEYS.IMPROVEMENTS, safeJsonStringify(improvements));
+
+  return true;
 }
