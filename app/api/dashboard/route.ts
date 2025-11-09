@@ -3,8 +3,8 @@ import {
   getProjects,
   getTasks,
   getAgents,
+  getImprovements,
 } from '@/lib/storage-adapter';
-import { getImprovements } from '@/lib/storage';
 import { Project, MaestroTask, Agent } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -220,12 +220,12 @@ function getWeeklyTaskStats(tasks: MaestroTask[]) {
 export async function GET(_request: NextRequest) {
   try {
     // Fetch all data
-    const [projects, tasks, agents] = await Promise.all([
+    const [projects, tasks, agents, improvements] = await Promise.all([
       getProjects(),
       getTasks(),
       getAgents(),
+      getImprovements(),
     ]);
-    const improvements = getImprovements();
 
     // Calculate summary metrics
     const activeProjects = projects.filter(p => p.status === 'active').length;

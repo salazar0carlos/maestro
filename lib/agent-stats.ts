@@ -4,7 +4,7 @@
  */
 
 import { Agent, MaestroTask } from './types';
-import { getAgent, updateAgent, getTasks } from './storage';
+import { getAgent, updateAgent, getTasks } from './storage-adapter';
 
 /**
  * Extended agent with calculated stats
@@ -32,14 +32,15 @@ export interface TaskResult {
  * Update agent statistics after task completion
  * Note: taskResult is reserved for future use with incremental stats updates
  */
-export function updateAgentStats(
+export async function updateAgentStats(
   agentId: string,
   _taskResult: TaskResult
-): AgentWithStats | null {
-  const agent = getAgent(agentId);
+): Promise<AgentWithStats | null> {
+  const agent = await getAgent(agentId);
   if (!agent) return null;
 
-  const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
+  const allTasks = await getTasks();
+  const tasks = allTasks.filter(t => t.assigned_to_agent === agentId);
   const completedTasks = tasks.filter(t => t.status === 'done');
   const failedTasks = tasks.filter(t => t.status === 'blocked');
 
@@ -64,7 +65,7 @@ export function updateAgentStats(
   });
 
   // Update agent record
-  updateAgent(agentId, {
+  await updateAgent(agentId, {
     tasks_completed: tasksCompleted,
     last_poll_date: new Date().toISOString(),
   });
@@ -174,11 +175,12 @@ export function calculateHealthScore(metrics: {
 /**
  * Get comprehensive agent statistics
  */
-export function getAgentStatistics(agentId: string): AgentWithStats | null {
-  const agent = getAgent(agentId);
+export async function getAgentStatistics(agentId: string): Promise<AgentWithStats | null> {
+  const agent = await getAgent(agentId);
   if (!agent) return null;
 
-  const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
+  const allTasks = await getTasks();
+  const tasks = allTasks.filter(t => t.assigned_to_agent === agentId);
   const completedTasks = tasks.filter(t => t.status === 'done');
   const failedTasks = tasks.filter(t => t.status === 'blocked');
   const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
@@ -213,18 +215,19 @@ export function getAgentStatistics(agentId: string): AgentWithStats | null {
 /**
  * Get statistics for all agents in a project
  */
-export function getProjectAgentStatistics(projectId: string): AgentWithStats[] {
-  const tasks = getTasks().filter(t => t.project_id === projectId);
+export async function getProjectAgentStatistics(projectId: string): Promise<AgentWithStats[]> {
+  const allTasks = await getTasks();
+  const tasks = allTasks.filter(t => t.project_id === projectId);
   const agentIds = new Set(tasks.map(t => t.assigned_to_agent));
 
   const stats: AgentWithStats[] = [];
 
-  agentIds.forEach(agentId => {
-    const agentStats = getAgentStatistics(agentId);
+  for (const agentId of agentIds) {
+    const agentStats = await getAgentStatistics(agentId);
     if (agentStats) {
       stats.push(agentStats);
     }
-  });
+  }
 
   // Sort by health score descending
   return stats.sort((a, b) => b.health_score - a.health_score);
@@ -233,12 +236,12 @@ export function getProjectAgentStatistics(projectId: string): AgentWithStats[] {
 /**
  * Check if agent needs attention (low health score)
  */
-export function checkAgentHealth(agentId: string): {
+export async function checkAgentHealth(agentId: string): Promise<{
   healthy: boolean;
   score: number;
   issues: string[];
-} {
-  const stats = getAgentStatistics(agentId);
+}> {
+  const stats = await getAgentStatistics(agentId);
   if (!stats) {
     return {
       healthy: false,
@@ -279,11 +282,11 @@ export function checkAgentHealth(agentId: string): {
 /**
  * Mark task as started (update agent in-progress count)
  */
-export function trackTaskStart(agentId: string, _taskId: string): void {
-  const agent = getAgent(agentId);
+export async function trackTaskStart(agentId: string, _taskId: string): Promise<void> {
+  const agent = await getAgent(agentId);
   if (!agent) return;
 
-  updateAgent(agentId, {
+  await updateAgent(agentId, {
     tasks_in_progress: agent.tasks_in_progress + 1,
     status: 'active',
     last_poll_date: new Date().toISOString(),
@@ -293,15 +296,15 @@ export function trackTaskStart(agentId: string, _taskId: string): void {
 /**
  * Mark task as completed (update agent stats)
  */
-export function trackTaskCompletion(
+export async function trackTaskCompletion(
   agentId: string,
   _taskId: string,
   success: boolean = true
-): void {
-  const agent = getAgent(agentId);
+): Promise<void> {
+  const agent = await getAgent(agentId);
   if (!agent) return;
 
-  updateAgent(agentId, {
+  await updateAgent(agentId, {
     tasks_in_progress: Math.max(0, agent.tasks_in_progress - 1),
     tasks_completed: success ? agent.tasks_completed + 1 : agent.tasks_completed,
     status: agent.tasks_in_progress > 1 ? 'active' : 'idle',

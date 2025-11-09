@@ -6,7 +6,7 @@
 
 import { Bottleneck, MaestroTask } from './types';
 import { getAgentsByType, getAllAgents } from './agent-registry';
-import { getTasks } from './storage';
+import { getTasks } from './storage-adapter';
 
 /**
  * Bottleneck Detector - Main class for bottleneck detection
@@ -15,12 +15,12 @@ export class BottleneckDetector {
   /**
    * Detect bottlenecks across all agent types
    */
-  static detectBottlenecks(): Bottleneck[] {
-    const agentTypes = this.getActiveAgentTypes();
+  static async detectBottlenecks(): Promise<Bottleneck[]> {
+    const agentTypes = await this.getActiveAgentTypes();
     const bottlenecks: Bottleneck[] = [];
 
     for (const type of agentTypes) {
-      const bottleneck = this.detectBottleneckForType(type);
+      const bottleneck = await this.detectBottleneckForType(type);
       if (bottleneck) {
         bottlenecks.push(bottleneck);
       }
@@ -32,9 +32,9 @@ export class BottleneckDetector {
   /**
    * Detect bottleneck for specific agent type
    */
-  static detectBottleneckForType(agentType: string): Bottleneck | null {
-    const agents = getAgentsByType(agentType);
-    const tasks = getTasks();
+  static async detectBottleneckForType(agentType: string): Promise<Bottleneck | null> {
+    const agents = await getAgentsByType(agentType);
+    const tasks = await getTasks();
 
     // Filter tasks for this agent type
     const typeTasks = tasks.filter(task => {
@@ -95,8 +95,8 @@ export class BottleneckDetector {
   /**
    * Get all active agent types
    */
-  static getActiveAgentTypes(): string[] {
-    const agents = getAllAgents();
+  static async getActiveAgentTypes(): Promise<string[]> {
+    const agents = await getAllAgents();
     const types = new Set<string>();
 
     for (const agent of agents) {
@@ -165,12 +165,12 @@ export class BottleneckDetector {
    * Detect task dependency bottlenecks
    * (Tasks blocked by other tasks, creating critical path delays)
    */
-  static detectDependencyBottlenecks(): Array<{
+  static async detectDependencyBottlenecks(): Promise<Array<{
     task: MaestroTask;
     blockingTasks: string[];
     estimatedDelay: number;
-  }> {
-    const tasks = getTasks();
+  }>> {
+    const tasks = await getTasks();
     const blockedTasks = tasks.filter(t => t.status === 'blocked');
 
     const bottlenecks = blockedTasks.map(task => {
@@ -213,13 +213,13 @@ export class BottleneckDetector {
   /**
    * Get recommendation for spawning new agents
    */
-  static getSpawnRecommendations(): Array<{
+  static async getSpawnRecommendations(): Promise<Array<{
     agent_type: string;
     reason: string;
     priority: 'high' | 'medium' | 'low';
     suggested_count: number;
-  }> {
-    const bottlenecks = this.detectBottlenecks();
+  }>> {
+    const bottlenecks = await this.detectBottlenecks();
     const recommendations = [];
 
     for (const bottleneck of bottlenecks) {
@@ -255,15 +255,15 @@ export class BottleneckDetector {
   /**
    * Check if system needs more capacity overall
    */
-  static needsMoreCapacity(): boolean {
-    const bottlenecks = this.detectBottlenecks();
+  static async needsMoreCapacity(): Promise<boolean> {
+    const bottlenecks = await this.detectBottlenecks();
     return bottlenecks.length > 0;
   }
 
   /**
    * Get capacity utilization across all agent types
    */
-  static getCapacityUtilization(): Record<
+  static async getCapacityUtilization(): Promise<Record<
     string,
     {
       agents: number;
@@ -272,13 +272,13 @@ export class BottleneckDetector {
       todo: number;
       utilization: number;
     }
-  > {
-    const agentTypes = this.getActiveAgentTypes();
+  >> {
+    const agentTypes = await this.getActiveAgentTypes();
     const utilization: Record<string, any> = {};
 
     for (const type of agentTypes) {
-      const agents = getAgentsByType(type);
-      const tasks = getTasks();
+      const agents = await getAgentsByType(type);
+      const tasks = await getTasks();
 
       const typeTasks = tasks.filter(task => {
         if (task.assigned_to_agent) {
@@ -308,27 +308,27 @@ export class BottleneckDetector {
 /**
  * Quick helper to detect bottlenecks
  */
-export function detectBottlenecks(): Bottleneck[] {
-  return BottleneckDetector.detectBottlenecks();
+export async function detectBottlenecks(): Promise<Bottleneck[]> {
+  return await BottleneckDetector.detectBottlenecks();
 }
 
 /**
  * Quick helper to get spawn recommendations
  */
-export function getSpawnRecommendations() {
-  return BottleneckDetector.getSpawnRecommendations();
+export async function getSpawnRecommendations() {
+  return await BottleneckDetector.getSpawnRecommendations();
 }
 
 /**
  * Quick helper to check if system needs more capacity
  */
-export function needsMoreCapacity(): boolean {
-  return BottleneckDetector.needsMoreCapacity();
+export async function needsMoreCapacity(): Promise<boolean> {
+  return await BottleneckDetector.needsMoreCapacity();
 }
 
 /**
  * Quick helper to get capacity utilization
  */
-export function getCapacityUtilization() {
-  return BottleneckDetector.getCapacityUtilization();
+export async function getCapacityUtilization() {
+  return await BottleneckDetector.getCapacityUtilization();
 }

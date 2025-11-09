@@ -8,7 +8,7 @@ import { AgentHealthMonitor } from '@/lib/agent-health';
 
 export async function GET() {
   try {
-    const healthCheck = AgentHealthMonitor.runHealthCheck();
+    const healthCheck = await AgentHealthMonitor.runHealthCheck();
 
     return NextResponse.json({
       systemHealth: healthCheck.systemHealth,

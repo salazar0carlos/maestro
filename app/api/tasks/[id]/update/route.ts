@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateTask, getTask } from '@/lib/storage';
+import { updateTask, getTask } from '@/lib/storage-adapter';
 import { MaestroTask } from '@/lib/types';
 import {
   withErrorHandling,
@@ -38,7 +38,7 @@ async function handler(
 
   try {
     // Get task
-    const task = getTask(params.id);
+    const task = await getTask(params.id);
     if (!task) {
       throw new NotFoundError('Task');
     }
@@ -86,7 +86,7 @@ async function handler(
     }
 
     // Perform update
-    const updated = updateTask(params.id, updates);
+    const updated = await updateTask(params.id, updates);
 
     if (!updated) {
       throw new Error('Failed to update task');
