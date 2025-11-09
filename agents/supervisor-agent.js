@@ -1,80 +1,63 @@
+#!/usr/bin/env node
+
 /**
  * Supervisor Agent
- * Oversees workflow, orchestration, and quality assurance
- * Focuses on: task coordination, quality checks, bottleneck resolution, reporting
+ * 
+ * Monitors overall system health and coordinates agents
  */
 
-const Agent = require('./agent-base');
+require('dotenv').config();
 
-class SupervisorAgent extends Agent {
-  constructor(maestroUrl = 'http://localhost:3000', anthropicApiKey = '') {
-    super('supervisor-agent', 'Supervisor', maestroUrl, anthropicApiKey);
-  }
+const AGENT_TYPE = 'Supervisor';
+const CHECK_INTERVAL = parseInt(process.env.HEALTH_CHECK_INTERVAL || '60000'); // 1 minute
 
-  /**
-   * Override executeTask to add supervisor-specific context
-   */
-  async executeTask(task) {
-    try {
-      const systemPrompt = `You are a Supervisor Agent for Maestro.
-Your role is to oversee workflow coordination, ensure quality standards, identify bottlenecks,
-and provide strategic guidance. Think critically about dependencies, resource allocation,
-and overall project health. Provide actionable recommendations and clear status updates.`;
+console.log(`[${AGENT_TYPE}] Starting supervisor agent...`);
+console.log(`[${AGENT_TYPE}] Health check interval: ${CHECK_INTERVAL}ms`);
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.anthropicApiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 8000,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: task.ai_prompt || task.description || task.title,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+async function checkSystemHealth() {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    
+    // Check if API is responsive
+    const response = await fetch(`${apiUrl}/api/supervisor/alerts`);
+    
+    if (response.ok) {
+      const alerts = await response.json();
+      
+      if (alerts.length > 0) {
+        console.log(`[${AGENT_TYPE}] ⚠️  ${alerts.length} alert(s) detected`);
+        alerts.forEach(alert => {
+          console.log(`[${AGENT_TYPE}]   - ${alert.type}: ${alert.message}`);
+        });
+      } else {
+        console.log(`[${AGENT_TYPE}] ✓ System healthy, no alerts`);
       }
-
-      const data = await response.json();
-      const content = data.content?.[0]?.text || '';
-
-      return {
-        status: 'success',
-        content: content,
-        taskId: task.task_id,
-      };
-    } catch (error) {
-      this.log(`Error executing task ${task.task_id}: ${error.message}`, 'error');
-      return {
-        status: 'error',
-        error: error.message,
-        taskId: task.task_id,
-      };
+    } else {
+      console.error(`[${AGENT_TYPE}] ❌ Health check failed: API returned ${response.status}`);
     }
+  } catch (error) {
+    console.error(`[${AGENT_TYPE}] ❌ Health check error:`, error.message);
   }
 }
 
-// Run agent if executed directly
-if (require.main === module) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || '';
-  if (!apiKey) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable not set');
-    process.exit(1);
-  }
+// Initial check
+console.log(`[${AGENT_TYPE}] ✓ Supervisor started, running initial health check...`);
+checkSystemHealth();
 
-  const agent = new SupervisorAgent('http://localhost:3000', apiKey);
-  agent.run(60000); // Poll every 60 seconds
-}
+// Schedule regular checks
+const intervalId = setInterval(checkSystemHealth, CHECK_INTERVAL);
 
-module.exports = SupervisorAgent;
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log(`\n[${AGENT_TYPE}] Received SIGTERM, shutting down...`);
+  clearInterval(intervalId);
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log(`\n[${AGENT_TYPE}] Received SIGINT, shutting down...`);
+  clearInterval(intervalId);
+  process.exit(0);
+});
+
+console.log(`[${AGENT_TYPE}] Supervisor ready, monitoring system...`);

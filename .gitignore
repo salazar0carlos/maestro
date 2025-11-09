@@ -41,3 +41,13 @@ next-env.d.ts
 .idea/
 *.swp
 *.swo
+
+# PM2 logs
+logs/
+.pm2/
+
+# Compiled workers
+workers/lib/
+workers/workers/
+dump.rdb
+*.backup
