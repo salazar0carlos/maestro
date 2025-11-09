@@ -6,6 +6,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 /**
+ * Reference template for prompt generation (currently handled by API route)
+ *
+ * Template structure:
+ * - GOAL: Clear, specific objective
+ * - CONTEXT: Why this matters, what it connects to, existing patterns
+ * - REQUIREMENTS: Functional and technical requirements (bullet list)
+ * - VALIDATION: How to test/verify it works
+ * - CONSTRAINTS: Architecture rules, patterns to follow, tech stack limitations
+ */
+
+// Reserved for future direct API usage
+// let client: Anthropic | null = null;
+
+/**
  * Generate a detailed task prompt from a title and optional description
  *
  * @param title - Simple task title (e.g., "Add dark mode toggle")
@@ -140,6 +154,7 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
 export function setApiKey(apiKey: string): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem('anthropic_api_key', apiKey);
+    // client = null; // Reset client to use new key (client not currently used)
   }
 }
 
