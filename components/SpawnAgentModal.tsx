@@ -13,12 +13,12 @@ interface SpawnAgentModalProps {
 }
 
 const AGENT_TYPES = [
-  { id: 'supervisor', name: 'Supervisor Agent', description: 'Oversees workflow and coordinates other agents' },
+  { id: 'supervisor', name: 'Supervisor', description: 'Oversees workflow and coordinates other agents' },
   { id: 'frontend', name: 'Frontend Agent', description: 'Specializes in React, Next.js, and UI development' },
   { id: 'backend', name: 'Backend Agent', description: 'Handles APIs, databases, and server-side logic' },
   { id: 'testing', name: 'Testing Agent', description: 'Writes and runs tests, ensures quality' },
   { id: 'research', name: 'Research Agent', description: 'Researches solutions and best practices' },
-  { id: 'product-improvement', name: 'Product Improvement Agent', description: 'Analyzes and suggests product enhancements' },
+  { id: 'product-improvement', name: 'Product Analyzer', description: 'Analyzes and suggests product enhancements' },
 ];
 
 export function SpawnAgentModal({ isOpen, onClose, onSuccess }: SpawnAgentModalProps) {
