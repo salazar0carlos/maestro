@@ -136,3 +136,106 @@ export interface AgentWorkload {
   in_progress: number;
   todo: number;
 }
+
+/**
+ * Phase 3: Maestro Intelligence Layer Types
+ */
+
+export type AnalysisStatus = 'running' | 'completed' | 'failed';
+export type SuggestionStatus = 'pending' | 'approved' | 'rejected' | 'implemented' | 'archived';
+export type SuggestionCategory = 'performance' | 'ux' | 'security' | 'architecture' | 'code_quality';
+export type ImplementationEffort = 'small' | 'medium' | 'large';
+export type ImpactAssessment = 'positive' | 'neutral' | 'negative' | 'mixed';
+export type PatternType = 'error_pattern' | 'usage_pattern' | 'performance_pattern' | 'security_pattern';
+export type ScheduleType = 'daily' | 'weekly' | 'monthly' | 'manual';
+
+/**
+ * Analysis run by ProductImprovementAgent
+ */
+export interface Analysis {
+  analysis_id: string;
+  project_id: string;
+  triggered_at: string;
+  completed_at?: string;
+  status: AnalysisStatus;
+  agent_insights?: any; // JSON from Claude
+  suggestions_count: number;
+  patterns_detected_count: number;
+  error_message?: string;
+  execution_time_ms?: number;
+  created_by: string;
+}
+
+/**
+ * Improvement suggestion from an analysis
+ */
+export interface ImprovementSuggestion {
+  suggestion_id: string;
+  analysis_id: string;
+  title: string;
+  description?: string;
+  category?: SuggestionCategory;
+  priority: TaskPriority;
+  status: SuggestionStatus;
+  impact_score?: number; // 0.00 to 1.00
+  implementation_effort?: ImplementationEffort;
+  estimated_hours?: number;
+  code_location?: string;
+  created_at: string;
+  approved_at?: string;
+  approved_by?: string;
+  implemented_at?: string;
+  implemented_by?: string;
+  rejection_reason?: string;
+}
+
+/**
+ * Pattern detected and learned by the system
+ */
+export interface Pattern {
+  pattern_id: string;
+  pattern_type: PatternType;
+  pattern_name: string;
+  pattern_description?: string;
+  pattern_data: any; // JSON
+  confidence_score?: number; // 0.00 to 1.00
+  times_observed: number;
+  first_seen: string;
+  last_seen: string;
+  related_analyses?: string[];
+  actionable: boolean;
+  tags?: string[];
+}
+
+/**
+ * Impact tracking for implemented suggestions
+ */
+export interface ImpactTracking {
+  tracking_id: string;
+  suggestion_id: string;
+  approval_date?: string;
+  implementation_date?: string;
+  before_metrics?: any; // JSON
+  after_metrics?: any; // JSON
+  impact_assessment?: ImpactAssessment;
+  impact_score?: number; // Measured impact 0.00 to 1.00
+  notes?: string;
+  measured_at: string;
+  measured_by?: string;
+}
+
+/**
+ * Analysis schedule configuration
+ */
+export interface AnalysisSchedule {
+  schedule_id: string;
+  project_id: string;
+  schedule_type: ScheduleType;
+  cron_expression: string;
+  enabled: boolean;
+  last_run_at?: string;
+  last_run_status?: string;
+  next_run_at?: string;
+  created_at: string;
+  updated_at: string;
+}
