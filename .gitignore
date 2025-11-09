@@ -50,3 +50,4 @@ logs/
 workers/lib/
 workers/workers/
 dump.rdb
+*.backup
