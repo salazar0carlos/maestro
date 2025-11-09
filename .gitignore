@@ -51,3 +51,4 @@ workers/lib/
 workers/workers/
 dump.rdb
 *.backup
+CODEBASE_EXPLORATION.md
