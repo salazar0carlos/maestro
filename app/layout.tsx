@@ -24,7 +24,7 @@ export default function RootLayout({
                 <span className="text-sm text-slate-400">AI Agent Command Center</span>
               </Link>
               <nav className="flex items-center gap-4">
-                <Link href="/" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                <Link href="/projects" className="text-sm text-slate-300 hover:text-blue-400 transition">
                   Projects
                 </Link>
                 <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">

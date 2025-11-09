@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
@@ -90,6 +91,7 @@ interface DashboardData {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -138,7 +140,9 @@ export default function Dashboard() {
     setProjectName('');
     setProjectDescription('');
     setIsNewProjectOpen(false);
-    await fetchDashboard();
+
+    // Redirect to projects page to see the new project
+    router.push('/projects');
   };
 
   if (isLoading) {
