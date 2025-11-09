@@ -28,12 +28,16 @@ export default function AgentsPage() {
 
   const loadData = async () => {
     const allAgents = getAllAgents();
-    const stuckAgentIds = new Set(getStuckAgents().map(a => a.agent_id));
-    const idleAgentIds = new Set(getIdleAgents().map(a => a.agent_id));
-    const offlineAgentIds = new Set(getOfflineAgents().map(a => a.agent_id));
+    const stuckAgents = await getStuckAgents();
+    const idleAgents = await getIdleAgents();
+    const offlineAgents = await getOfflineAgents();
+
+    const stuckAgentIds = new Set(stuckAgents.map((a: Agent) => a.agent_id));
+    const idleAgentIds = new Set(idleAgents.map((a: Agent) => a.agent_id));
+    const offlineAgentIds = new Set(offlineAgents.map((a: Agent) => a.agent_id));
 
     // Enhance agents with metrics and current status
-    const enhancedAgents: AgentWithMetrics[] = allAgents.map(agent => {
+    const enhancedAgents: AgentWithMetrics[] = allAgents.map((agent: Agent) => {
       const healthScore = calculateHealthScore(agent);
       const currentStatus = offlineAgentIds.has(agent.agent_id)
         ? 'offline'
@@ -55,9 +59,9 @@ export default function AgentsPage() {
     setAgents(enhancedAgents);
 
     // Load supervisor data
-    setSystemHealth(getSystemHealth());
-    setBottlenecks(detectBottlenecks());
-    setAlerts(generateAlerts());
+    setSystemHealth(await getSystemHealth());
+    setBottlenecks(await detectBottlenecks());
+    setAlerts(await generateAlerts());
 
     // Load task history (last 50 tasks) - now async
     const allTasks = await getTasks();
