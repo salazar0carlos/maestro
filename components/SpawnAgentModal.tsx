@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { getProjects } from '@/lib/storage';
+import { getProjects } from '@/lib/storage-adapter';
 import { Project } from '@/lib/types';
 
 interface SpawnAgentModalProps {

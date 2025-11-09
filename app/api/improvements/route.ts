@@ -15,7 +15,7 @@ import {
   getProjectImprovements,
   getImprovementsByStatus,
   createImprovement,
-} from '@/lib/storage';
+} from '@/lib/storage-adapter';
 import { ImprovementSuggestion } from '@/lib/types';
 import {
   withErrorHandling,
@@ -56,9 +56,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     let improvements: ImprovementSuggestion[];
 
     if (status) {
-      improvements = getImprovementsByStatus(projectId, status);
+      improvements = await getImprovementsByStatus(projectId, status);
     } else {
-      improvements = getProjectImprovements(projectId);
+      improvements = await getProjectImprovements(projectId);
     }
 
     // Filter by suggested_by if provided
@@ -125,7 +125,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     };
 
     // Save to storage
-    const created = createImprovement(newImprovement);
+    const created = await createImprovement(newImprovement);
 
     PerformanceMonitor.end('create_improvement');
 

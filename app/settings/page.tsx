@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { DatabaseStatus } from '@/components/DatabaseStatus';
+import { DataMigration } from '@/components/DataMigration';
 import { CostTracker } from '@/lib/cost-tracking';
-import { clearAllData } from '@/lib/storage';
+import { getStorageType } from '@/lib/storage-adapter';
 
 type ViewDensity = 'compact' | 'comfortable';
 type ColorScheme = 'blue' | 'purple' | 'green' | 'orange';
@@ -39,20 +41,12 @@ const defaultSettings: Settings = {
 };
 
 export default function SettingsPage() {
-  const [apiKey, setApiKeyValue] = useState('');
-  const [displayApiKey, setDisplayApiKey] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [usageStats, setUsageStats] = useState({ calls: 0, tokens: 0, cost: 0 });
+  const [storageType, setStorageType] = useState<'database' | 'localStorage'>('localStorage');
 
   useEffect(() => {
-    // Load API key
-    const stored = localStorage.getItem('anthropic_api_key') || '';
-    setApiKeyValue(stored);
-    setDisplayApiKey(stored ? '••••••••••••' + stored.slice(-4) : '');
-
     // Load settings
     const savedSettings = localStorage.getItem('maestro:settings');
     if (savedSettings) {
@@ -70,75 +64,14 @@ export default function SettingsPage() {
       tokens: stats.total_tokens,
       cost: stats.total_cost_usd,
     });
+
+    // Detect storage type
+    setStorageType(getStorageType());
   }, []);
 
   const showMessage = (msg: string, isError: boolean = false) => {
     setMessage(isError ? `Error: ${msg}` : `✓ ${msg}`);
     setTimeout(() => setMessage(''), 3000);
-  };
-
-  const handleSaveApiKey = () => {
-    const trimmedKey = apiKey.trim();
-
-    if (!trimmedKey) {
-      showMessage('Please enter an API key', true);
-      return;
-    }
-
-    if (!trimmedKey.startsWith('sk-ant-')) {
-      showMessage('API key must start with sk-ant-', true);
-      return;
-    }
-
-    if (trimmedKey.length > 200) {
-      showMessage('API key is too long. Keys should be around 40-60 characters.', true);
-      return;
-    }
-
-    setIsSaving(true);
-    localStorage.setItem('anthropic_api_key', trimmedKey);
-    setDisplayApiKey('••••••••••••' + trimmedKey.slice(-4));
-    showMessage('API key saved successfully');
-    setIsSaving(false);
-  };
-
-  const handleClearApiKey = () => {
-    localStorage.removeItem('anthropic_api_key');
-    setApiKeyValue('');
-    setDisplayApiKey('');
-    showMessage('API key cleared');
-  };
-
-  const handleTestConnection = async () => {
-    const key = localStorage.getItem('anthropic_api_key');
-    if (!key) {
-      showMessage('Please set an API key first', true);
-      return;
-    }
-
-    setIsTestingConnection(true);
-    try {
-      const response = await fetch('/api/generate-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskTitle: 'Connection Test',
-          taskDescription: 'Testing API connection',
-          projectContext: '',
-        }),
-      });
-
-      if (response.ok) {
-        showMessage('Connection successful!');
-      } else {
-        const error = await response.json();
-        showMessage(error.error || 'Connection failed', true);
-      }
-    } catch (error) {
-      showMessage('Connection failed', true);
-    } finally {
-      setIsTestingConnection(false);
-    }
   };
 
   const handleSaveSettings = () => {
@@ -150,19 +83,16 @@ export default function SettingsPage() {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleExportData = () => {
+  const handleExportData = async () => {
     try {
-      const data = {
-        apiKey: localStorage.getItem('anthropic_api_key'),
-        settings: settings,
-        projects: localStorage.getItem('maestro:projects'),
-        tasks: localStorage.getItem('maestro:tasks'),
-        agents: localStorage.getItem('maestro:agents'),
-        improvements: localStorage.getItem('maestro:improvements'),
-        costRecords: localStorage.getItem('maestro:cost_records'),
-        exportDate: new Date().toISOString(),
-      };
+      showMessage('Exporting data from database...');
 
+      const response = await fetch('/api/database/export');
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const data = await response.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -180,44 +110,25 @@ export default function SettingsPage() {
   };
 
   const handleImportData = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      try {
-        const text = await file.text();
-        const data = JSON.parse(text);
-
-        if (confirm('This will replace all current data. Continue?')) {
-          if (data.apiKey) localStorage.setItem('anthropic_api_key', data.apiKey);
-          if (data.settings) localStorage.setItem('maestro:settings', JSON.stringify(data.settings));
-          if (data.projects) localStorage.setItem('maestro:projects', data.projects);
-          if (data.tasks) localStorage.setItem('maestro:tasks', data.tasks);
-          if (data.agents) localStorage.setItem('maestro:agents', data.agents);
-          if (data.improvements) localStorage.setItem('maestro:improvements', data.improvements);
-          if (data.costRecords) localStorage.setItem('maestro:cost_records', data.costRecords);
-
-          showMessage('Data imported successfully. Refreshing...');
-          setTimeout(() => window.location.reload(), 1500);
-        }
-      } catch (error) {
-        showMessage('Import failed - invalid file format', true);
-      }
-    };
-    input.click();
+    showMessage('Import feature coming soon. Use the migration tool above to transfer localStorage data.', false);
   };
 
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (confirm('⚠️ This will delete ALL data including projects, tasks, and agents. This cannot be undone. Continue?')) {
       if (confirm('Are you absolutely sure? This is permanent!')) {
-        clearAllData();
-        CostTracker.clearRecords();
-        localStorage.removeItem('maestro:settings');
-        showMessage('All data cleared. Refreshing...');
-        setTimeout(() => window.location.reload(), 1500);
+        try {
+          const response = await fetch('/api/database/clear', { method: 'POST' });
+          if (response.ok) {
+            CostTracker.clearRecords();
+            localStorage.removeItem('maestro:settings');
+            showMessage('All data cleared. Refreshing...');
+            setTimeout(() => window.location.reload(), 1500);
+          } else {
+            showMessage('Failed to clear data', true);
+          }
+        } catch (error) {
+          showMessage('Failed to clear data', true);
+        }
       }
     }
   };
@@ -241,104 +152,35 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* 1. API Configuration */}
+      {/* 1. Database & API */}
       <section className="mb-8">
-        <h2 className="text-xl font-bold text-slate-50 mb-4">API Configuration</h2>
+        <h2 className="text-xl font-bold text-slate-50 mb-4">Database & API</h2>
 
-        <Card className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-50 mb-4">Anthropic API Key</h3>
+        <div className="space-y-4">
+          <DatabaseStatus />
+          <DataMigration />
 
-          <div className="space-y-4">
-            <p className="text-sm text-slate-400">
-              Your API key is used to generate AI prompts for tasks. Get your key from{' '}
-              <a
-                href="https://console.anthropic.com/account/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
-                console.anthropic.com
-              </a>
-            </p>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                API Key
-              </label>
-              {displayApiKey && !apiKey ? (
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="password"
-                    value={displayApiKey}
-                    disabled
-                    className="flex-1 rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-slate-400 cursor-not-allowed"
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setApiKeyValue('');
-                      setDisplayApiKey('');
-                    }}
-                  >
-                    Change
-                  </Button>
-                  <Button variant="ghost" onClick={handleClearApiKey}>
-                    Clear
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={e => setApiKeyValue(e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none font-mono text-sm mb-2"
-                  />
-                  <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => setApiKeyValue('')}>
-                      Cancel
-                    </Button>
-                    <Button variant="primary" onClick={handleSaveApiKey} isLoading={isSaving}>
-                      Save
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {displayApiKey && (
-              <div className="pt-4 border-t border-slate-700">
-                <Button
-                  variant="secondary"
-                  onClick={handleTestConnection}
-                  isLoading={isTestingConnection}
-                  className="w-full sm:w-auto"
-                >
-                  {isTestingConnection ? 'Testing...' : 'Test Connection'}
-                </Button>
+          <Card>
+            <h3 className="text-lg font-semibold text-slate-50 mb-4">API Usage Statistics</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <div className="text-sm text-slate-400 mb-1">API Calls</div>
+                <div className="text-2xl font-bold text-slate-50">{usageStats.calls.toLocaleString()}</div>
               </div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="text-lg font-semibold text-slate-50 mb-4">Usage Statistics</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-700/50 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">API Calls</div>
-              <div className="text-2xl font-bold text-slate-50">{usageStats.calls.toLocaleString()}</div>
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <div className="text-sm text-slate-400 mb-1">Tokens Used</div>
+                <div className="text-2xl font-bold text-slate-50">{usageStats.tokens.toLocaleString()}</div>
+              </div>
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <div className="text-sm text-slate-400 mb-1">Total Cost</div>
+                <div className="text-2xl font-bold text-slate-50">${usageStats.cost.toFixed(4)}</div>
+              </div>
             </div>
-            <div className="bg-slate-700/50 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Tokens Used</div>
-              <div className="text-2xl font-bold text-slate-50">{usageStats.tokens.toLocaleString()}</div>
-            </div>
-            <div className="bg-slate-700/50 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Total Cost</div>
-              <div className="text-2xl font-bold text-slate-50">${usageStats.cost.toFixed(4)}</div>
-            </div>
-          </div>
-        </Card>
+            <p className="text-xs text-slate-500 mt-4">
+              API key is configured in Vercel environment variables (ANTHROPIC_API_KEY)
+            </p>
+          </Card>
+        </div>
       </section>
 
       {/* 2. Project Defaults */}
@@ -615,16 +457,16 @@ export default function SettingsPage() {
         <h2 className="text-lg font-bold text-slate-50 mb-4">About Maestro</h2>
         <div className="space-y-3 text-sm text-slate-400">
           <p>
-            <strong className="text-slate-300">Version:</strong> 0.1.0 (Phase 1)
+            <strong className="text-slate-300">Version:</strong> 0.2.0 (Phase 2 - Database Migration)
           </p>
           <p>
-            <strong className="text-slate-300">Storage:</strong> localStorage (browser-based, persistent across sessions)
+            <strong className="text-slate-300">Storage:</strong> {storageType === 'database' ? 'Supabase (PostgreSQL)' : 'localStorage (fallback)'}
           </p>
           <p>
-            <strong className="text-slate-300">Features:</strong> Project management, task creation, AI prompt generation, agent monitoring, cost tracking
+            <strong className="text-slate-300">Features:</strong> Project management, task creation, AI prompt generation, agent monitoring, cost tracking, database persistence
           </p>
           <p>
-            <strong className="text-slate-300">Coming Soon:</strong> Real-time updates, PostgreSQL backend, GitHub integration, team collaboration
+            <strong className="text-slate-300">Coming Soon:</strong> Real-time updates, GitHub integration, team collaboration, advanced analytics
           </p>
         </div>
       </Card>

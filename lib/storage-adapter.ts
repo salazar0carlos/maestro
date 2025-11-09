@@ -245,6 +245,79 @@ export async function clearAllData(): Promise<void> {
   }
 }
 
+// ============ IMPROVEMENT SUGGESTIONS STORAGE ============
+
+export async function getImprovements(): Promise<import('./types').ImprovementSuggestion[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovements();
+  } else {
+    return Promise.resolve(storage.getImprovements());
+  }
+}
+
+export async function getImprovement(improvementId: string): Promise<import('./types').ImprovementSuggestion | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovement(improvementId);
+  } else {
+    return Promise.resolve(storage.getImprovement(improvementId));
+  }
+}
+
+export async function getProjectImprovements(projectId: string): Promise<import('./types').ImprovementSuggestion[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getProjectImprovements(projectId);
+  } else {
+    return Promise.resolve(storage.getProjectImprovements(projectId));
+  }
+}
+
+export async function getImprovementsByStatus(
+  projectId: string,
+  status: string
+): Promise<import('./types').ImprovementSuggestion[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovementsByStatus(projectId, status);
+  } else {
+    return Promise.resolve(storage.getImprovementsByStatus(projectId, status));
+  }
+}
+
+export async function createImprovement(
+  improvement: import('./types').ImprovementSuggestion
+): Promise<import('./types').ImprovementSuggestion> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.createImprovement(improvement);
+  } else {
+    return Promise.resolve(storage.createImprovement(improvement));
+  }
+}
+
+export async function updateImprovement(
+  improvementId: string,
+  updates: Partial<import('./types').ImprovementSuggestion>
+): Promise<import('./types').ImprovementSuggestion | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.updateImprovement(improvementId, updates);
+  } else {
+    return Promise.resolve(storage.updateImprovement(improvementId, updates));
+  }
+}
+
+export async function deleteImprovement(improvementId: string): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.deleteImprovement(improvementId);
+  } else {
+    return Promise.resolve(storage.deleteImprovement(improvementId));
+  }
+}
+
 // Export storage type for debugging
 export function getStorageType(): 'database' | 'localStorage' {
   return isDatabaseConfigured() ? 'database' : 'localStorage';

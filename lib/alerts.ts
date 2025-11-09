@@ -8,7 +8,7 @@ import { Alert } from './types';
 import { AgentHealthMonitor } from './agent-health';
 import { BottleneckDetector } from './bottleneck-detection';
 import { getAllAgents } from './agent-registry';
-import { getTasks } from './storage';
+import { getTasks } from './storage-adapter';
 
 const ALERTS_STORAGE_KEY = 'maestro:alerts';
 const ALERT_RATE_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
@@ -20,13 +20,13 @@ export class AlertSystem {
   /**
    * Generate all alerts based on current system state
    */
-  static generateAlerts(): Alert[] {
+  static async generateAlerts(): Promise<Alert[]> {
     const alerts: Alert[] = [];
     const now = new Date().toISOString();
 
     // Critical: All agents offline
-    const allAgents = getAllAgents();
-    const offlineAgents = AgentHealthMonitor.getOfflineAgents();
+    const allAgents = await getAllAgents();
+    const offlineAgents = await AgentHealthMonitor.getOfflineAgents();
 
     if (allAgents.length > 0 && offlineAgents.length === allAgents.length) {
       const alert: Alert = {
@@ -44,7 +44,7 @@ export class AlertSystem {
     }
 
     // High: Critical tasks blocked >24h
-    const blockedTasks = getTasks().filter(t => t.status === 'blocked');
+    const blockedTasks = (await getTasks()).filter(t => t.status === 'blocked');
     const criticalBlockedTasks = blockedTasks.filter(task => {
       const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
@@ -79,7 +79,7 @@ export class AlertSystem {
     }
 
     // Medium: Error rate >50%
-    const recentTasks = this.getRecentTasks(24); // last 24h
+    const recentTasks = await this.getRecentTasks(24); // last 24h
     if (recentTasks.length > 10) {
       const failed = recentTasks.filter(t => t.status === 'blocked').length;
       const errorRate = failed / recentTasks.length;
@@ -103,7 +103,7 @@ export class AlertSystem {
     }
 
     // Low: Bottleneck detected
-    const bottlenecks = BottleneckDetector.detectBottlenecks();
+    const bottlenecks = await BottleneckDetector.detectBottlenecks();
     if (bottlenecks.length > 0) {
       const alert: Alert = {
         severity: 'low',
@@ -123,7 +123,7 @@ export class AlertSystem {
     }
 
     // High: Multiple stuck agents
-    const stuckAgents = AgentHealthMonitor.getStuckAgents();
+    const stuckAgents = await AgentHealthMonitor.getStuckAgents();
     if (stuckAgents.length >= 3) {
       const alert: Alert = {
         severity: 'high',
@@ -140,7 +140,7 @@ export class AlertSystem {
     }
 
     // Critical: System health critical
-    const systemHealth = AgentHealthMonitor.getSystemHealth();
+    const systemHealth = await AgentHealthMonitor.getSystemHealth();
     if (systemHealth.status === 'critical') {
       const alert: Alert = {
         severity: 'critical',
@@ -162,9 +162,9 @@ export class AlertSystem {
   /**
    * Get recent tasks (within last N hours)
    */
-  static getRecentTasks(hours: number) {
+  static async getRecentTasks(hours: number) {
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    const tasks = getTasks();
+    const tasks = await getTasks();
 
     return tasks.filter(task => {
       const taskDate = new Date(task.created_date).getTime();
@@ -337,8 +337,8 @@ export class AlertSystem {
 /**
  * Quick helper to generate alerts
  */
-export function generateAlerts(): Alert[] {
-  return AlertSystem.generateAlerts();
+export async function generateAlerts(): Promise<Alert[]> {
+  return await AlertSystem.generateAlerts();
 }
 
 /**

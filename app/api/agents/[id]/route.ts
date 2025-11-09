@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/storage-adapter';
-import { updateAgent } from '@/lib/storage';
+import { updateAgent } from '@/lib/storage-adapter';
 import { Agent } from '@/lib/types';
 import {
   withErrorHandling,
@@ -43,13 +43,13 @@ async function handleGet(
 
     // Add detailed statistics if requested
     if (withStats) {
-      const stats = getAgentStatistics(params.id);
+      const stats = await getAgentStatistics(params.id);
       result = stats || agent;
     }
 
     // Add health check if requested
     if (checkHealth) {
-      const health = checkAgentHealth(params.id);
+      const health = await checkAgentHealth(params.id);
       result = { ...result, health };
     }
 
@@ -96,7 +96,7 @@ async function handlePatch(
     updates.last_poll_date = new Date().toISOString();
 
     // Perform update
-    const updated = updateAgent(params.id, updates);
+    const updated = await updateAgent(params.id, updates);
     if (!updated) {
       throw new Error('Failed to update agent');
     }

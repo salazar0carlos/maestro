@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAgents, getProjectAgents, createAgent } from '@/lib/storage';
+import { getAgents, getProjectAgents, createAgent } from '@/lib/storage-adapter';
 import { Agent } from '@/lib/types';
 import {
   withErrorHandling,
@@ -44,7 +44,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     const withStats = getQueryParam(request, 'with_stats') === 'true';
 
     // Get agents
-    let agents = projectId ? getProjectAgents(projectId) : getAgents();
+    let agents = projectId ? await getProjectAgents(projectId) : await getAgents();
 
     // Filter by status
     if (status) {
@@ -55,12 +55,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     let result;
     if (withStats) {
       if (projectId) {
-        result = getProjectAgentStatistics(projectId);
+        result = await getProjectAgentStatistics(projectId);
         if (status) {
           result = result.filter(a => a.status === status);
         }
       } else {
-        result = agents.map(agent => getAgentStatistics(agent.agent_id)).filter(Boolean);
+        result = await Promise.all(agents.map(agent => getAgentStatistics(agent.agent_id)));
+        result = result.filter(Boolean);
       }
     } else {
       result = agents;
@@ -115,7 +116,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     };
 
     // Save to storage
-    const created = createAgent(newAgent);
+    const created = await createAgent(newAgent);
 
     PerformanceMonitor.end('create_agent');
 

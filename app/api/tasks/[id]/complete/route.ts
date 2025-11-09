@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateTask, getTask } from '@/lib/storage';
+import { updateTask, getTask } from '@/lib/storage-adapter';
 import {
   withErrorHandling,
   successResponse,
@@ -29,7 +29,7 @@ async function handler(
 
   try {
     // Get task
-    const task = getTask(params.id);
+    const task = await getTask(params.id);
     if (!task) {
       throw new NotFoundError('Task');
     }
@@ -54,7 +54,7 @@ async function handler(
       updates.started_date = new Date().toISOString();
     }
 
-    const updated = updateTask(params.id, updates);
+    const updated = await updateTask(params.id, updates);
 
     if (!updated) {
       throw new ApiError(
@@ -65,7 +65,7 @@ async function handler(
     }
 
     // Update agent statistics
-    trackTaskCompletion(task.assigned_to_agent, params.id, true);
+    await trackTaskCompletion(task.assigned_to_agent, params.id, true);
 
     PerformanceMonitor.end('complete_task');
 

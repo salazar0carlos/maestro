@@ -102,15 +102,11 @@ export default function ImportPDFModal({
         try {
           const base64String = (event.target?.result as string)?.split(',')[1] || '';
 
-          // Get API key from localStorage
-          const apiKey = localStorage.getItem('anthropic_api_key') || '';
-
-          // Call API to parse PDF
+          // Call API to parse PDF (API key is in server environment variables)
           const response = await fetch('/api/parse-pdf', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-anthropic-key': apiKey,
             },
             body: JSON.stringify({
               pdfBase64: base64String,

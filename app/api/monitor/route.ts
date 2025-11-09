@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getAgents, getTasks, getProjects } from '@/lib/storage';
+import { getAgents, getTasks, getProjects } from '@/lib/storage-adapter';
 import { getAgentStatistics, checkAgentHealth } from '@/lib/agent-stats';
 import { Agent, MaestroTask, Project } from '@/lib/types';
 
@@ -139,17 +139,17 @@ function isBottleneck(agent: Agent, tasks: MaestroTask[]): boolean {
 
 export async function GET() {
   try {
-    const agents = getAgents();
-    const allTasks = getTasks();
-    const projects = getProjects();
+    const agents = await getAgents();
+    const allTasks = await getTasks();
+    const projects = await getProjects();
 
     const projectMap = new Map<string, Project>();
     projects.forEach(p => projectMap.set(p.project_id, p));
 
     // Build monitoring data for each agent
-    const monitorData: AgentMonitorData[] = agents.map(agent => {
-      const stats = getAgentStatistics(agent.agent_id);
-      const health = checkAgentHealth(agent.agent_id);
+    const monitorData: AgentMonitorData[] = await Promise.all(agents.map(async agent => {
+      const stats = await getAgentStatistics(agent.agent_id);
+      const health = await checkAgentHealth(agent.agent_id);
       const agentTasks = allTasks.filter(t => t.assigned_to_agent === agent.agent_id);
       const project = projectMap.get(agent.project_id);
 
@@ -179,7 +179,7 @@ export async function GET() {
         is_bottleneck: bottleneck,
         health_issues: health.issues,
       };
-    });
+    }));
 
     // Calculate overall stats
     const stats: MonitoringStats = {

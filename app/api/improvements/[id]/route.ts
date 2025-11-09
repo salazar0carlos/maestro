@@ -19,7 +19,7 @@ import {
   updateImprovement,
   createTask,
   getProject,
-} from '@/lib/storage';
+} from '@/lib/storage-adapter';
 import { ImprovementSuggestion, MaestroTask } from '@/lib/types';
 import {
   withErrorHandling,
@@ -49,7 +49,7 @@ async function handleGet(
   PerformanceMonitor.start('get_improvement');
 
   try {
-    const improvement = getImprovement(params.id);
+    const improvement = await getImprovement(params.id);
     if (!improvement) {
       throw new NotFoundError('Improvement suggestion');
     }
@@ -74,7 +74,7 @@ async function handlePatch(
   PerformanceMonitor.start('update_improvement');
 
   try {
-    const improvement = getImprovement(params.id);
+    const improvement = await getImprovement(params.id);
     if (!improvement) {
       throw new NotFoundError('Improvement suggestion');
     }
@@ -116,7 +116,7 @@ async function handlePatch(
     let createdTask: MaestroTask | null = null;
     if (body.status === 'approved' && body.convert_to_task === true) {
       // Verify project exists
-      const project = getProject(improvement.project_id);
+      const project = await getProject(improvement.project_id);
       if (!project) {
         throw new NotFoundError('Project');
       }
@@ -137,13 +137,13 @@ async function handlePatch(
         created_date: new Date().toISOString(),
       };
 
-      createdTask = createTask(newTask);
+      createdTask = await createTask(newTask);
       updates.converted_to_task_id = taskId;
       updates.status = 'implemented';
     }
 
     // Perform update
-    const updated = updateImprovement(params.id, updates);
+    const updated = await updateImprovement(params.id, updates);
     if (!updated) {
       throw new Error('Failed to update improvement');
     }

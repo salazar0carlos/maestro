@@ -5,18 +5,18 @@
  */
 
 import { Agent, AgentWorkload } from './types';
-import { getTasks, getAgents, updateAgent as updateAgentStorage, createAgent as createAgentStorage } from './storage';
+import { getTasks, getAgents, updateAgent as updateAgentStorage, createAgent as createAgentStorage } from './storage-adapter';
 
 const STORAGE_KEY = 'maestro:agent_registry';
 
 /**
  * Get all agents from registry with extended fields
  */
-export function getAllAgents(): Agent[] {
+export async function getAllAgents(): Promise<Agent[]> {
   if (typeof window === 'undefined') return [];
 
   // Get agents from main storage
-  const agents = getAgents();
+  const agents = await getAgents();
 
   // Merge with extended registry data
   const registry = getExtendedRegistry();
@@ -57,7 +57,7 @@ function saveExtendedRegistry(registry: Record<string, Partial<Agent>>): void {
 /**
  * Register a new agent with full capabilities
  */
-export function registerAgent(agent: Agent): Agent {
+export async function registerAgent(agent: Agent): Promise<Agent> {
   // Validate required fields
   if (!agent.agent_id || !agent.agent_name || !agent.project_id) {
     throw new Error('Missing required agent fields: agent_id, agent_name, project_id');
@@ -83,7 +83,7 @@ export function registerAgent(agent: Agent): Agent {
   };
 
   // Save to main storage
-  createAgentStorage(fullAgent);
+  await createAgentStorage(fullAgent);
 
   // Save extended data
   const registry = getExtendedRegistry();
@@ -105,8 +105,8 @@ export function registerAgent(agent: Agent): Agent {
 /**
  * Get agents by type (Frontend, Backend, Testing, etc.)
  */
-export function getAgentsByType(type: string): Agent[] {
-  const agents = getAllAgents();
+export async function getAgentsByType(type: string): Promise<Agent[]> {
+  const agents = await getAllAgents();
 
   // Filter by type and exclude offline agents (no poll in last 10 minutes)
   const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
@@ -127,12 +127,12 @@ export function getAgentsByType(type: string): Agent[] {
 /**
  * Update agent status and metadata
  */
-export function updateAgentStatus(agentId: string, status: 'active' | 'idle' | 'offline'): Agent | null {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+export async function updateAgentStatus(agentId: string, status: 'active' | 'idle' | 'offline'): Promise<Agent | null> {
+  const agent = (await getAllAgents()).find(a => a.agent_id === agentId);
   if (!agent) return null;
 
   // Update main storage
-  const updated = updateAgentStorage(agentId, {
+  const updated = await updateAgentStorage(agentId, {
     status,
     last_poll_date: new Date().toISOString(),
   });
@@ -140,14 +140,14 @@ export function updateAgentStatus(agentId: string, status: 'active' | 'idle' | '
   if (!updated) return null;
 
   // Return full agent with extended data
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+  return (await getAllAgents()).find(a => a.agent_id === agentId) || null;
 }
 
 /**
  * Get agent workload (tasks assigned to this agent)
  */
-export function getAgentWorkload(agentId: string): AgentWorkload {
-  const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
+export async function getAgentWorkload(agentId: string): Promise<AgentWorkload> {
+  const tasks = (await getTasks()).filter(t => t.assigned_to_agent === agentId);
 
   return {
     total: tasks.length,
@@ -202,8 +202,8 @@ export function calculateHealthScore(agent: Agent): number {
 /**
  * Update agent health score
  */
-export function updateAgentHealthScore(agentId: string): number {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+export async function updateAgentHealthScore(agentId: string): Promise<number> {
+  const agent = (await getAllAgents()).find(a => a.agent_id === agentId);
   if (!agent) return 0;
 
   const healthScore = calculateHealthScore(agent);
@@ -222,12 +222,12 @@ export function updateAgentHealthScore(agentId: string): number {
 /**
  * Update agent performance metrics after task completion
  */
-export function updateAgentPerformance(
+export async function updateAgentPerformance(
   agentId: string,
   taskSuccess: boolean,
   taskDuration: number
-): Agent | null {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+): Promise<Agent | null> {
+  const agent = (await getAllAgents()).find(a => a.agent_id === agentId);
   if (!agent) return null;
 
   const tasksCompleted = agent.tasks_completed || 0;
@@ -245,7 +245,7 @@ export function updateAgentPerformance(
   const newAvgTime = Math.round(currentAvg * (1 - alpha) + taskDuration * alpha);
 
   // Update storage
-  updateAgentStorage(agentId, {
+  await updateAgentStorage(agentId, {
     tasks_completed: taskSuccess ? tasksCompleted + 1 : tasksCompleted,
     tasks_failed: taskSuccess ? tasksFailed : tasksFailed + 1,
   });
@@ -263,22 +263,22 @@ export function updateAgentPerformance(
   saveExtendedRegistry(registry);
 
   // Update health score
-  updateAgentHealthScore(agentId);
+  await updateAgentHealthScore(agentId);
 
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+  return (await getAllAgents()).find(a => a.agent_id === agentId) || null;
 }
 
 /**
  * Get agent by ID with extended data
  */
-export function getAgentById(agentId: string): Agent | null {
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+export async function getAgentById(agentId: string): Promise<Agent | null> {
+  return (await getAllAgents()).find(a => a.agent_id === agentId) || null;
 }
 
 /**
  * Update agent's current task
  */
-export function setAgentCurrentTask(agentId: string, taskId: string | undefined): Agent | null {
+export async function setAgentCurrentTask(agentId: string, taskId: string | undefined): Promise<Agent | null> {
   const registry = getExtendedRegistry();
 
   if (!registry[agentId]) {
@@ -290,10 +290,10 @@ export function setAgentCurrentTask(agentId: string, taskId: string | undefined)
 
   // Update status
   if (taskId) {
-    updateAgentStorage(agentId, { status: 'active' });
+    await updateAgentStorage(agentId, { status: 'active' });
   } else {
-    updateAgentStorage(agentId, { status: 'idle' });
+    await updateAgentStorage(agentId, { status: 'idle' });
   }
 
-  return getAgentById(agentId);
+  return await getAgentById(agentId);
 }
