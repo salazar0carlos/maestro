@@ -8,6 +8,17 @@
       "created_date": "2025-11-05T04:18:26.660Z",
       "agent_count": 2,
       "task_count": 3
+    },
+    {
+      "project_id": "maestro-self-improvement",
+      "name": "Maestro",
+      "description": "Maestro platform self-improvement - autonomous analysis and enhancement of the Maestro system itself",
+      "github_repo": "",
+      "local_path": "/home/user/maestro",
+      "status": "active",
+      "created_date": "2025-11-09T03:47:11.351Z",
+      "agent_count": 3,
+      "task_count": 0
     }
   ],
   "agents": [
@@ -23,6 +34,32 @@
       "agent_id": "agent-1762316306661-2",
       "project_id": "project-1762316306661",
       "agent_name": "frontend-agent",
+      "status": "idle",
+      "tasks_completed": 0,
+      "tasks_in_progress": 0
+    },
+    {
+      "agent_id": "maestro-product-improvement-agent",
+      "project_id": "maestro-self-improvement",
+      "agent_name": "product-improvement-agent",
+      "status": "active",
+      "tasks_completed": 0,
+      "tasks_in_progress": 0,
+      "last_poll_date": "2025-11-09T03:47:11.351Z"
+    },
+    {
+      "agent_id": "maestro-supervisor-agent",
+      "project_id": "maestro-self-improvement",
+      "agent_name": "supervisor-agent",
+      "status": "active",
+      "tasks_completed": 0,
+      "tasks_in_progress": 0,
+      "last_poll_date": "2025-11-09T03:47:11.351Z"
+    },
+    {
+      "agent_id": "maestro-backend-agent",
+      "project_id": "maestro-self-improvement",
+      "agent_name": "backend-agent",
       "status": "idle",
       "tasks_completed": 0,
       "tasks_in_progress": 0
@@ -65,7 +102,49 @@
       "priority": 3,
       "status": "todo",
       "created_date": "2025-11-05T04:18:26.660Z"
+    },
+    {
+      "task_id": "task-1762660031351-init",
+      "project_id": "maestro-self-improvement",
+      "title": "Analyze Maestro codebase for improvement opportunities",
+      "description": "Perform comprehensive analysis of the Maestro platform codebase to identify:\n- Code quality issues (patterns, anti-patterns, technical debt)\n- Performance optimization opportunities\n- User experience improvements\n- Architecture enhancements\n- Security vulnerabilities\n- Missing features that would improve the platform\n\nFocus on actionable improvements that make Maestro better at managing AI agents and orchestrating autonomous development.",
+      "ai_prompt": "",
+      "assigned_to_agent": "product-improvement-agent",
+      "priority": 1,
+      "status": "todo",
+      "created_date": "2025-11-09T03:47:11.351Z"
+    },
+    {
+      "task_id": "task-1762660031361",
+      "project_id": "maestro-self-improvement",
+      "title": "Add request caching to API routes",
+      "description": "Implement request caching to reduce redundant API calls and improve performance.\n\n**Rationale:**\nCurrent API routes make fresh calls for every request, even when data hasn't changed. This increases latency and API costs.\n\n**Implementation:**\n1. Add cache layer using in-memory store\n2. Implement cache invalidation on data updates\n3. Add cache headers to responses\n4. Monitor cache hit rates\n\n**Expected Impact:**\n- 40-60% reduction in API response time\n- Lower infrastructure costs\n- Better user experience",
+      "ai_prompt": "Implement the following improvement:\n\nImplement request caching to reduce redundant API calls and improve performance.\n\n**Rationale:**\nCurrent API routes make fresh calls for every request, even when data hasn't changed. This increases latency and API costs.\n\n**Implementation:**\n1. Add cache layer using in-memory store\n2. Implement cache invalidation on data updates\n3. Add cache headers to responses\n4. Monitor cache hit rates\n\n**Expected Impact:**\n- 40-60% reduction in API response time\n- Lower infrastructure costs\n- Better user experience",
+      "assigned_to_agent": "backend-agent",
+      "priority": 2,
+      "status": "done",
+      "created_date": "2025-11-09T03:47:11.361Z",
+      "started_date": "2025-11-09T03:47:11.362Z",
+      "completed_date": "2025-11-09T03:47:12.364Z",
+      "completed_by_agent": "backend-agent",
+      "ai_response": "Successfully implemented caching layer with 50% cache hit rate"
     }
   ],
-  "lastUpdated": "2025-11-05T04:18:37.320Z"
+  "lastUpdated": "2025-11-05T04:18:37.320Z",
+  "improvements": [
+    {
+      "improvement_id": "test-imp-1762660031360",
+      "project_id": "maestro-self-improvement",
+      "title": "Add request caching to API routes",
+      "description": "Implement request caching to reduce redundant API calls and improve performance.\n\n**Rationale:**\nCurrent API routes make fresh calls for every request, even when data hasn't changed. This increases latency and API costs.\n\n**Implementation:**\n1. Add cache layer using in-memory store\n2. Implement cache invalidation on data updates\n3. Add cache headers to responses\n4. Monitor cache hit rates\n\n**Expected Impact:**\n- 40-60% reduction in API response time\n- Lower infrastructure costs\n- Better user experience",
+      "suggested_by": "product-improvement-agent",
+      "status": "implemented",
+      "priority": 2,
+      "estimated_impact": "high",
+      "created_date": "2025-11-09T03:47:11.360Z",
+      "reviewed_date": "2025-11-09T03:47:11.361Z",
+      "reviewed_by": "test-user",
+      "converted_to_task_id": "task-1762660031361"
+    }
+  ]
 }
