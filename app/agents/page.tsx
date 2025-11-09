@@ -27,7 +27,7 @@ export default function AgentsPage() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const loadData = async () => {
-    const allAgents = getAllAgents();
+    const allAgents = await getAllAgents();
     const stuckAgents = await getStuckAgents();
     const idleAgents = await getIdleAgents();
     const offlineAgents = await getOfflineAgents();
