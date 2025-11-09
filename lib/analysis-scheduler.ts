@@ -4,7 +4,7 @@
  */
 
 import { getSupabase, Tables } from './supabase';
-import { EventBus, EventTypes } from './event-system';
+import { EventBus } from './event-system';
 
 export interface ScheduledAnalysis {
   project_id: string;
@@ -276,9 +276,9 @@ export class AnalysisScheduler {
         let lastAnalysisDate: string | null = null;
         let nextAnalysisDate: Date;
 
-        if (data && !error) {
+        if (data && !error && data.analysis_date) {
           lastAnalysisDate = data.analysis_date;
-          const lastDate = new Date(lastAnalysisDate);
+          const lastDate = new Date(data.analysis_date);
           nextAnalysisDate = new Date(lastDate.getTime() + this.config.interval_hours * 60 * 60 * 1000);
         } else {
           // No previous analysis, next is now

@@ -165,7 +165,7 @@ export class PatternLibraryService {
    */
   async matchPattern(
     suggestionDescription: string,
-    codeExample: string
+    _codeExample: string
   ): Promise<PatternMatch[]> {
     const supabase = getSupabase();
 

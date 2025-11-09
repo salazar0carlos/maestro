@@ -127,8 +127,8 @@ async function handlePatch(
         task_id: taskId,
         project_id: improvement.project_id,
         title: improvement.title,
-        description: improvement.description,
-        ai_prompt: `Implement the following improvement:\n\n${improvement.description}`,
+        description: improvement.description || '',
+        ai_prompt: `Implement the following improvement:\n\n${improvement.description || improvement.title}`,
         assigned_to_agent: improvement.suggested_by === 'system'
           ? 'unassigned'
           : improvement.suggested_by,

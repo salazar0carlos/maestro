@@ -7,12 +7,21 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Get credentials from environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Create Supabase client (browser-safe with anon key)
+// Create client with placeholder values if env vars not set
+// This allows the app to build without configured Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Helper to check if Supabase is configured
+export const isSupabaseConfigured = () => {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://placeholder.supabase.co'
+  );
+};
 
 // Server-side client with service role (for agents)
 export function createServiceClient() {
@@ -30,66 +39,19 @@ export function createServiceClient() {
   });
 }
 
-// Check if Supabase is configured
-export function isSupabaseConfigured(): boolean {
-  return Boolean(supabaseUrl && supabaseAnonKey);
-}
+// Export for compatibility with analysis modules
+export const getSupabase = () => supabase;
 
-// Database types (matching our schema)
-export interface DbProject {
-  project_id: string;
-  name: string;
-  description?: string;
-  status: string;
-  created_date: string;
-  agent_count: number;
-  task_count: number;
-  github_repo?: string;
-  local_path?: string;
-}
+// Database table names for analysis modules
+export const Tables = {
+  ANALYSIS_HISTORY: 'analysis_history',
+  PATTERN_LIBRARY: 'pattern_library',
+  IMPACT_TRACKING: 'impact_tracking',
+  CODE_SNAPSHOTS: 'code_snapshots',
+  SUGGESTION_QUALITY_METRICS: 'suggestion_quality_metrics',
+} as const;
 
-export interface DbTask {
-  task_id: string;
-  project_id: string;
-  title: string;
-  description?: string;
-  ai_prompt?: string;
-  assigned_to_agent?: string;
-  assigned_to_agent_type?: string;
-  priority: number;
-  status: string;
-  created_date: string;
-  started_date?: string;
-  completed_date?: string;
-  blocked_reason?: string;
-  ai_response?: string;
-  completed_by_agent?: string;
-}
-
-export interface DbAgent {
-  agent_id: string;
-  project_id: string;
-  agent_name: string;
-  agent_type?: string;
-  status: string;
-  last_poll_date?: string;
-  tasks_completed: number;
-  tasks_in_progress: number;
-  tasks_failed?: number;
-  success_rate?: number;
-  average_task_time?: number;
-  current_task_id?: string;
-  capabilities?: string[];
-  health_score?: number;
-  created_date?: string;
-}
- * Supabase client configuration for Maestro
- * Provides database access for analysis history, pattern library, and impact tracking
- */
-
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-// Database types
+// Analysis module types (for Phase 3 continuous analysis)
 export interface AnalysisHistory {
   id: string;
   project_id: string;
@@ -156,60 +118,6 @@ export interface SuggestionQualityMetrics {
   created_at: string;
 }
 
-/**
- * Get Supabase client instance
- */
-export function getSupabaseClient(): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
-
-/**
- * Singleton Supabase client
- */
-let supabaseInstance: SupabaseClient | null = null;
-
-export function getSupabase(): SupabaseClient {
-  if (!supabaseInstance) {
-    supabaseInstance = getSupabaseClient();
-  }
-  return supabaseInstance;
-}
-
-/**
- * Database table names
- */
-export const Tables = {
-  ANALYSIS_HISTORY: 'analysis_history',
-  PATTERN_LIBRARY: 'pattern_library',
-  IMPACT_TRACKING: 'impact_tracking',
-  CODE_SNAPSHOTS: 'code_snapshots',
-  SUGGESTION_QUALITY_METRICS: 'suggestion_quality_metrics',
-} as const;
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
-
-// Create client with placeholder values if env vars not set
-// This allows the app to build without configured Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Helper to check if Supabase is configured
-export const isSupabaseConfigured = () => {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://placeholder.supabase.co'
-  );
-};
-
 export type Database = {
   public: {
     Tables: {
@@ -236,12 +144,15 @@ export type Database = {
           description: string;
           ai_prompt: string;
           assigned_to_agent: string | null;
+          assigned_to_agent_type: string | null;
           priority: number;
           status: 'todo' | 'in-progress' | 'done' | 'blocked';
           created_date: string;
           started_date: string | null;
           completed_date: string | null;
           blocked_reason: string | null;
+          ai_response: string | null;
+          completed_by_agent: string | null;
         };
         Insert: Omit<Database['public']['Tables']['tasks']['Row'], 'created_date'>;
         Update: Partial<Database['public']['Tables']['tasks']['Insert']>;
@@ -251,10 +162,18 @@ export type Database = {
           agent_id: string;
           project_id: string;
           agent_name: string;
+          agent_type: string | null;
           status: 'active' | 'idle' | 'offline';
           last_poll_date: string | null;
           tasks_completed: number;
           tasks_in_progress: number;
+          tasks_failed: number | null;
+          success_rate: number | null;
+          average_task_time: number | null;
+          current_task_id: string | null;
+          capabilities: string[] | null;
+          health_score: number | null;
+          created_date: string | null;
         };
         Insert: Database['public']['Tables']['agents']['Row'];
         Update: Partial<Database['public']['Tables']['agents']['Insert']>;
@@ -299,6 +218,8 @@ export type Database = {
           estimated_impact: 'low' | 'medium' | 'high';
           created_date: string;
           reviewed_date: string | null;
+          reviewed_by: string | null;
+          rejection_reason: string | null;
           converted_to_task_id: string | null;
         };
         Insert: Omit<Database['public']['Tables']['improvements']['Row'], 'created_date'>;

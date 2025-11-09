@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAgent, getTasks } from '@/lib/storage-adapter';
-import { getAgent, updateAgent } from '@/lib/storage';
+import { getAgent } from '@/lib/storage-adapter';
+import { updateAgent } from '@/lib/storage';
 import { Agent } from '@/lib/types';
 import {
   withErrorHandling,
@@ -32,13 +32,12 @@ async function handleGet(
 
   try {
     const agent = await getAgent(params.id);
-    const withStats = getQueryParam(request, 'with_stats') === 'true';
-    const checkHealth = getQueryParam(request, 'check_health') === 'true';
-
-    const agent = getAgent(params.id);
     if (!agent) {
       throw new NotFoundError('Agent');
     }
+
+    const withStats = getQueryParam(request, 'with_stats') === 'true';
+    const checkHealth = getQueryParam(request, 'check_health') === 'true';
 
     let result: any = agent;
 
@@ -74,29 +73,11 @@ async function handlePatch(
   PerformanceMonitor.start('update_agent');
 
   try {
-    const agent = getAgent(params.id);
+    const agent = await getAgent(params.id);
     if (!agent) {
       throw new NotFoundError('Agent');
     }
 
-    // Get all tasks for this agent
-    const allTasks = await getTasks();
-    const agentTasks = allTasks.filter(t => t.assigned_to_agent === params.id);
-
-    // Count tasks by status
-    const todo = agentTasks.filter(t => t.status === 'todo').length;
-    const inProgress = agentTasks.filter(t => t.status === 'in-progress').length;
-    const done = agentTasks.filter(t => t.status === 'done').length;
-    const blocked = agentTasks.filter(t => t.status === 'blocked').length;
-
-    return NextResponse.json({
-      ...agent,
-      total_tasks: agentTasks.length,
-      todo_count: todo,
-      in_progress_count: inProgress,
-      done_count: done,
-      blocked_count: blocked,
-      tasks: agentTasks,
     // Parse request body
     const body = await parseJsonBody<Partial<Agent>>(request);
 
