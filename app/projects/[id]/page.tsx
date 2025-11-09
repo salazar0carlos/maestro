@@ -8,7 +8,7 @@ import {
   getProjectTasks,
   updateTask,
   deleteTask,
-} from '@/lib/storage';
+} from '@/lib/storage-adapter';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import NewTaskModal from '@/components/NewTaskModal';
@@ -27,20 +27,23 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    const loaded = getProject(params.id);
-    if (!loaded) {
-      setIsLoading(false);
-      return;
-    }
+    const loadProject = async () => {
+      const loaded = await getProject(params.id);
+      if (!loaded) {
+        setIsLoading(false);
+        return;
+      }
 
-    setProject(loaded);
-    const projectTasks = getProjectTasks(params.id);
-    setTasks(projectTasks);
-    setIsLoading(false);
+      setProject(loaded);
+      const projectTasks = await getProjectTasks(params.id);
+      setTasks(projectTasks);
+      setIsLoading(false);
+    };
+    loadProject();
   }, [params.id]);
 
-  const handleTaskStatusChange = (taskId: string, newStatus: TaskStatus) => {
-    const updated = updateTask(taskId, {
+  const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    const updated = await updateTask(taskId, {
       status: newStatus,
       started_date:
         newStatus === 'in-progress'
@@ -57,9 +60,9 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
     }
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     if (confirm('Are you sure? This cannot be undone.')) {
-      deleteTask(taskId);
+      await deleteTask(taskId);
       setTasks(tasks.filter(t => t.task_id !== taskId));
       setIsTaskDetailOpen(false);
     }

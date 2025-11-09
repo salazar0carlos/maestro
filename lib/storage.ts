@@ -153,7 +153,7 @@ export function getTasksByStatus(projectId: string, status: string): MaestroTask
 }
 
 /**
- * Create new task
+ * Create new task and trigger agent via webhook
  */
 export function createTask(task: MaestroTask): MaestroTask {
   if (!isBrowser()) return task;
@@ -170,7 +170,105 @@ export function createTask(task: MaestroTask): MaestroTask {
     });
   }
 
+  // Enqueue task for agent execution (queue-based architecture)
+  if (task.assigned_to_agent && task.status === 'todo') {
+    enqueueTaskForAgent(task).catch(error => {
+      console.error('[createTask] Failed to enqueue task:', error);
+    });
+  }
+
   return task;
+}
+
+/**
+ * Enqueue task for agent execution via BullMQ
+ */
+async function enqueueTaskForAgent(task: MaestroTask): Promise<void> {
+  if (!isBrowser()) return;
+
+  try {
+    // Infer agent type from assigned agent or task content
+    const agentType = inferAgentTypeFromTask(task);
+
+    if (!agentType) {
+      console.warn('[enqueueTaskForAgent] Could not infer agent type for task:', task.task_id);
+      return;
+    }
+
+    // Call API to enqueue task
+    const response = await fetch('/api/tasks/enqueue', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ taskId: task.task_id, task, agentType }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('[triggerAgentForTask] Webhook trigger failed:', error);
+    } else {
+      console.log('[triggerAgentForTask] Successfully triggered agent for task:', task.task_id);
+    }
+  } catch (error) {
+    console.error('[triggerAgentForTask] Error:', error);
+  }
+}
+
+/**
+ * Infer agent type from task
+ */
+function inferAgentTypeFromTask(task: MaestroTask): string | null {
+  const content = (task.title + ' ' + task.description + ' ' + (task.ai_prompt || '')).toLowerCase();
+
+  // Frontend patterns
+  if (
+    content.includes('ui') ||
+    content.includes('frontend') ||
+    content.includes('react') ||
+    content.includes('component') ||
+    content.includes('css') ||
+    content.includes('style') ||
+    content.includes('tailwind')
+  ) {
+    return 'Frontend';
+  }
+
+  // Backend patterns
+  if (
+    content.includes('api') ||
+    content.includes('backend') ||
+    content.includes('database') ||
+    content.includes('server') ||
+    content.includes('endpoint') ||
+    content.includes('route')
+  ) {
+    return 'Backend';
+  }
+
+  // Testing patterns
+  if (
+    content.includes('test') ||
+    content.includes('testing') ||
+    content.includes('spec') ||
+    content.includes('jest') ||
+    content.includes('cypress')
+  ) {
+    return 'Testing';
+  }
+
+  // Integration patterns
+  if (
+    content.includes('integration') ||
+    content.includes('deploy') ||
+    content.includes('ci/cd') ||
+    content.includes('docker')
+  ) {
+    return 'Integration';
+  }
+
+  // Default to Backend
+  return 'Backend';
 }
 
 /**
