@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { getProjects } from '@/lib/storage';
+import { getProjects } from '@/lib/storage-adapter';
 import { Project } from '@/lib/types';
 
 interface SpawnAgentModalProps {
@@ -30,9 +30,12 @@ export function SpawnAgentModal({ isOpen, onClose, onSuccess }: SpawnAgentModalP
 
   useEffect(() => {
     if (isOpen) {
-      const loadedProjects = getProjects();
-      setProjects(loadedProjects);
-      setError('');
+      const loadProjects = async () => {
+        const loadedProjects = await getProjects();
+        setProjects(loadedProjects);
+        setError('');
+      };
+      loadProjects();
     }
   }, [isOpen]);
 

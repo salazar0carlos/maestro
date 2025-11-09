@@ -8,7 +8,7 @@ import { TaskRouter } from '@/lib/task-assignment';
 
 export async function POST() {
   try {
-    const results = TaskRouter.reassignStuckTasks();
+    const results = await TaskRouter.reassignStuckTasks();
 
     return NextResponse.json({
       results,

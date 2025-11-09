@@ -1,241 +1,256 @@
--- Maestro Database Schema for Supabase
--- Run this in Supabase SQL Editor after creating your project
+-- Maestro Supabase Schema
+-- PostgreSQL schema for storing Maestro orchestration data
+
+-- Drop existing tables if they exist (for clean reinstall)
+DROP TABLE IF EXISTS suggestion_quality_metrics CASCADE;
+DROP TABLE IF EXISTS code_snapshots CASCADE;
+DROP TABLE IF EXISTS impact_tracking CASCADE;
+DROP TABLE IF EXISTS pattern_library CASCADE;
+DROP TABLE IF EXISTS analysis_history CASCADE;
+DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS cost_records CASCADE;
+DROP TABLE IF EXISTS improvements CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS agents CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+
+-- ============================================================================
+-- CORE TABLES
+-- ============================================================================
 
 -- Projects table
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE projects (
   project_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
   status TEXT DEFAULT 'active',
   created_date TIMESTAMPTZ DEFAULT NOW(),
   agent_count INTEGER DEFAULT 0,
-  task_count INTEGER DEFAULT 0,
-  github_repo TEXT,
-  local_path TEXT
--- Maestro Analytics Database Schema
--- Run this in your Supabase SQL editor
-
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Projects table
-CREATE TABLE IF NOT EXISTS projects (
-  project_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  github_repo TEXT,
-  local_path TEXT,
-  status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'complete')),
-  created_date TIMESTAMPTZ DEFAULT NOW(),
-  agent_count INTEGER DEFAULT 0,
   task_count INTEGER DEFAULT 0
 );
 
--- Tasks table
-CREATE TABLE IF NOT EXISTS tasks (
-  task_id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT,
-  ai_prompt TEXT,
-  assigned_to_agent TEXT,
-  assigned_to_agent_type TEXT,
-  priority INTEGER DEFAULT 3,
-  status TEXT DEFAULT 'todo',
-  created_date TIMESTAMPTZ DEFAULT NOW(),
-  started_date TIMESTAMPTZ,
-  completed_date TIMESTAMPTZ,
-  blocked_reason TEXT,
-  ai_response TEXT,
-  completed_by_agent TEXT
-  task_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
-  ai_prompt TEXT NOT NULL,
-  assigned_to_agent TEXT,
-  priority INTEGER DEFAULT 3 CHECK (priority >= 1 AND priority <= 5),
-  status TEXT NOT NULL CHECK (status IN ('todo', 'in-progress', 'done', 'blocked')),
-  created_date TIMESTAMPTZ DEFAULT NOW(),
-  started_date TIMESTAMPTZ,
-  completed_date TIMESTAMPTZ,
-  blocked_reason TEXT
-);
-
 -- Agents table
-CREATE TABLE IF NOT EXISTS agents (
+CREATE TABLE agents (
   agent_id TEXT PRIMARY KEY,
-  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   agent_name TEXT NOT NULL,
-  agent_type TEXT,
   status TEXT DEFAULT 'idle',
-  last_poll_date TIMESTAMPTZ,
   tasks_completed INTEGER DEFAULT 0,
   tasks_in_progress INTEGER DEFAULT 0,
-  tasks_failed INTEGER DEFAULT 0,
-  success_rate DECIMAL DEFAULT 1.0,
-  average_task_time INTEGER,
-  current_task_id TEXT,
-  capabilities TEXT[],
-  health_score INTEGER,
+  last_poll_date TIMESTAMPTZ,
+  health_score REAL DEFAULT 100.0,
   created_date TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_to_agent);
-CREATE INDEX IF NOT EXISTS idx_agents_project ON agents(project_id);
-CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_date DESC);
-
--- Enable Row Level Security (RLS)
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
-
--- Create policies (allow all for now, can restrict later)
-DROP POLICY IF EXISTS "Allow all access to projects" ON projects;
-CREATE POLICY "Allow all access to projects" ON projects FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "Allow all access to tasks" ON tasks;
-CREATE POLICY "Allow all access to tasks" ON tasks FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "Allow all access to agents" ON agents;
-CREATE POLICY "Allow all access to agents" ON agents FOR ALL USING (true);
-
--- Success message
-DO $$
-BEGIN
-  RAISE NOTICE 'Maestro database schema created successfully!';
-  RAISE NOTICE 'Tables: projects, tasks, agents';
-  RAISE NOTICE 'You can now configure your application with the Supabase credentials.';
-END $$;
-  project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
-  agent_name TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'idle', 'offline')),
-  last_poll_date TIMESTAMPTZ,
-  tasks_completed INTEGER DEFAULT 0,
-  tasks_in_progress INTEGER DEFAULT 0
-);
-
--- Cost records table (for Claude API usage tracking)
-CREATE TABLE IF NOT EXISTS cost_records (
-  record_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id TEXT,
-  task_id UUID REFERENCES tasks(task_id) ON DELETE SET NULL,
-  project_id UUID REFERENCES projects(project_id) ON DELETE SET NULL,
-  model TEXT NOT NULL,
-  input_tokens INTEGER NOT NULL,
-  output_tokens INTEGER NOT NULL,
-  cost_usd DECIMAL(10, 6) NOT NULL,
-  operation TEXT NOT NULL,
-  timestamp TIMESTAMPTZ DEFAULT NOW(),
-  metadata JSONB
-);
-
--- Events table (for event tracking)
-CREATE TABLE IF NOT EXISTS events (
-  event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  event_type TEXT NOT NULL,
-  source TEXT NOT NULL,
-  data JSONB,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
+-- Tasks table
+CREATE TABLE tasks (
+  task_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'todo',
+  priority INTEGER DEFAULT 3,
+  assigned_to_agent TEXT REFERENCES agents(agent_id) ON DELETE SET NULL,
+  created_date TIMESTAMPTZ DEFAULT NOW(),
+  started_date TIMESTAMPTZ,
+  completed_date TIMESTAMPTZ,
+  ai_prompt TEXT,
+  tags TEXT[]
 );
 
 -- Improvements table
-CREATE TABLE IF NOT EXISTS improvements (
-  improvement_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
+CREATE TABLE improvements (
+  improvement_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   suggested_by TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'implemented')),
-  priority INTEGER DEFAULT 3 CHECK (priority >= 1 AND priority <= 5),
-  estimated_impact TEXT CHECK (estimated_impact IN ('low', 'medium', 'high')),
+  status TEXT DEFAULT 'pending',
+  priority INTEGER DEFAULT 3,
+  estimated_impact TEXT DEFAULT 'medium',
   created_date TIMESTAMPTZ DEFAULT NOW(),
-  reviewed_date TIMESTAMPTZ,
-  converted_to_task_id UUID REFERENCES tasks(task_id) ON DELETE SET NULL
+  implemented_date TIMESTAMPTZ
 );
 
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_agent ON tasks(assigned_to_agent);
-CREATE INDEX IF NOT EXISTS idx_tasks_created_date ON tasks(created_date);
-CREATE INDEX IF NOT EXISTS idx_tasks_completed_date ON tasks(completed_date);
+-- Cost records table
+CREATE TABLE cost_records (
+  cost_id SERIAL PRIMARY KEY,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+  agent_id TEXT REFERENCES agents(agent_id) ON DELETE SET NULL,
+  cost_usd REAL NOT NULL,
+  tokens_used INTEGER,
+  model TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
 
-CREATE INDEX IF NOT EXISTS idx_agents_project_id ON agents(project_id);
-CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+-- Events table
+CREATE TABLE events (
+  event_id SERIAL PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+  agent_id TEXT REFERENCES agents(agent_id) ON DELETE SET NULL,
+  message TEXT NOT NULL,
+  severity TEXT DEFAULT 'info',
+  metadata JSONB,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
 
-CREATE INDEX IF NOT EXISTS idx_cost_records_timestamp ON cost_records(timestamp);
-CREATE INDEX IF NOT EXISTS idx_cost_records_agent_id ON cost_records(agent_id);
-CREATE INDEX IF NOT EXISTS idx_cost_records_task_id ON cost_records(task_id);
-CREATE INDEX IF NOT EXISTS idx_cost_records_project_id ON cost_records(project_id);
-CREATE INDEX IF NOT EXISTS idx_cost_records_model ON cost_records(model);
+-- ============================================================================
+-- INTELLIGENCE LAYER TABLES
+-- ============================================================================
 
-CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
+-- Analysis history table
+CREATE TABLE analysis_history (
+  analysis_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  analysis_type TEXT NOT NULL,
+  findings JSONB NOT NULL,
+  suggestions TEXT[],
+  metrics JSONB,
+  triggered_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Views for analytics
+-- Pattern library table
+CREATE TABLE pattern_library (
+  pattern_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  pattern_type TEXT NOT NULL,
+  pattern_name TEXT NOT NULL,
+  description TEXT,
+  occurrence_count INTEGER DEFAULT 1,
+  confidence_score REAL DEFAULT 0.5,
+  related_tasks TEXT[],
+  metadata JSONB,
+  first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Agent productivity metrics
-CREATE OR REPLACE VIEW agent_productivity AS
+-- Impact tracking table
+CREATE TABLE impact_tracking (
+  impact_id TEXT PRIMARY KEY,
+  improvement_id TEXT REFERENCES improvements(improvement_id) ON DELETE CASCADE,
+  metric_name TEXT NOT NULL,
+  before_value REAL,
+  after_value REAL,
+  improvement_percentage REAL,
+  measured_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB
+);
+
+-- Code snapshots table
+CREATE TABLE code_snapshots (
+  snapshot_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  file_path TEXT NOT NULL,
+  content TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  related_task_id TEXT REFERENCES tasks(task_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB
+);
+
+-- Suggestion quality metrics table
+CREATE TABLE suggestion_quality_metrics (
+  metric_id TEXT PRIMARY KEY,
+  improvement_id TEXT REFERENCES improvements(improvement_id) ON DELETE CASCADE,
+  suggestion_quality_score REAL,
+  implementation_success BOOLEAN,
+  time_to_implement_hours REAL,
+  user_rating INTEGER CHECK (user_rating >= 1 AND user_rating <= 5),
+  feedback_text TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- INDEXES FOR PERFORMANCE
+-- ============================================================================
+
+-- Core table indexes
+CREATE INDEX idx_agents_project_id ON agents(project_id);
+CREATE INDEX idx_agents_status ON agents(status);
+CREATE INDEX idx_tasks_project_id ON tasks(project_id);
+CREATE INDEX idx_tasks_assigned_to_agent ON tasks(assigned_to_agent);
+CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_priority ON tasks(priority);
+CREATE INDEX idx_improvements_project_id ON improvements(project_id);
+CREATE INDEX idx_improvements_status ON improvements(status);
+CREATE INDEX idx_cost_records_project_id ON cost_records(project_id);
+CREATE INDEX idx_cost_records_timestamp ON cost_records(timestamp);
+CREATE INDEX idx_events_project_id ON events(project_id);
+CREATE INDEX idx_events_timestamp ON events(timestamp);
+
+-- Intelligence layer indexes
+CREATE INDEX idx_analysis_history_project_id ON analysis_history(project_id);
+CREATE INDEX idx_analysis_history_created_at ON analysis_history(created_at);
+CREATE INDEX idx_pattern_library_project_id ON pattern_library(project_id);
+CREATE INDEX idx_pattern_library_pattern_type ON pattern_library(pattern_type);
+CREATE INDEX idx_impact_tracking_improvement_id ON impact_tracking(improvement_id);
+CREATE INDEX idx_code_snapshots_project_id ON code_snapshots(project_id);
+CREATE INDEX idx_code_snapshots_file_path ON code_snapshots(file_path);
+CREATE INDEX idx_suggestion_quality_metrics_improvement_id ON suggestion_quality_metrics(improvement_id);
+
+-- ============================================================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================================================
+
+-- Disable RLS for now (enable in production with proper policies)
+ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE improvements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE cost_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis_history DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pattern_library DISABLE ROW LEVEL SECURITY;
+ALTER TABLE impact_tracking DISABLE ROW LEVEL SECURITY;
+ALTER TABLE code_snapshots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE suggestion_quality_metrics DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================================
+-- USEFUL VIEWS
+-- ============================================================================
+
+-- Active agents view
+CREATE OR REPLACE VIEW active_agents AS
 SELECT
-  a.agent_id,
-  a.agent_name,
-  a.project_id,
-  a.status,
-  a.tasks_completed,
-  a.tasks_in_progress,
-  COUNT(DISTINCT t.task_id) FILTER (WHERE t.completed_date >= NOW() - INTERVAL '1 day') as tasks_completed_today,
-  COUNT(DISTINCT t.task_id) FILTER (WHERE t.completed_date >= NOW() - INTERVAL '7 days') as tasks_completed_week,
-  ROUND(AVG(EXTRACT(EPOCH FROM (t.completed_date - t.started_date)) / 3600)::numeric, 2) as avg_completion_hours,
-  COALESCE(SUM(cr.cost_usd), 0) as total_cost
+  a.*,
+  p.name AS project_name,
+  COUNT(DISTINCT t.task_id) AS current_tasks
 FROM agents a
-LEFT JOIN tasks t ON a.agent_id = t.assigned_to_agent
-LEFT JOIN cost_records cr ON a.agent_id = cr.agent_id
-GROUP BY a.agent_id, a.agent_name, a.project_id, a.status, a.tasks_completed, a.tasks_in_progress;
+LEFT JOIN projects p ON a.project_id = p.project_id
+LEFT JOIN tasks t ON t.assigned_to_agent = a.agent_id AND t.status = 'in-progress'
+WHERE a.status != 'offline'
+GROUP BY a.agent_id, p.name;
 
--- Task completion trends
-CREATE OR REPLACE VIEW task_completion_trends AS
+-- Task summary view
+CREATE OR REPLACE VIEW task_summary AS
 SELECT
-  DATE(completed_date) as completion_date,
-  COUNT(*) as tasks_completed,
-  status,
-  project_id
-FROM tasks
-WHERE completed_date IS NOT NULL
-GROUP BY DATE(completed_date), status, project_id
-ORDER BY completion_date DESC;
+  p.project_id,
+  p.name AS project_name,
+  COUNT(CASE WHEN t.status = 'todo' THEN 1 END) AS todo_count,
+  COUNT(CASE WHEN t.status = 'in-progress' THEN 1 END) AS in_progress_count,
+  COUNT(CASE WHEN t.status = 'done' THEN 1 END) AS done_count,
+  COUNT(CASE WHEN t.status = 'blocked' THEN 1 END) AS blocked_count,
+  COUNT(t.task_id) AS total_tasks
+FROM projects p
+LEFT JOIN tasks t ON p.project_id = t.project_id
+GROUP BY p.project_id, p.name;
 
--- Cost analytics
-CREATE OR REPLACE VIEW cost_analytics AS
-SELECT
-  DATE(timestamp) as cost_date,
-  model,
-  agent_id,
-  project_id,
-  COUNT(*) as api_calls,
-  SUM(input_tokens) as total_input_tokens,
-  SUM(output_tokens) as total_output_tokens,
-  SUM(cost_usd) as total_cost
-FROM cost_records
-GROUP BY DATE(timestamp), model, agent_id, project_id
-ORDER BY cost_date DESC;
+-- ============================================================================
+-- COMMENTS
+-- ============================================================================
 
--- Enable Row Level Security (RLS) - Optional, can be configured later
--- ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE cost_records ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE events ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE improvements ENABLE ROW LEVEL SECURITY;
-
-COMMENT ON TABLE projects IS 'Maestro orchestration projects';
-COMMENT ON TABLE tasks IS 'Tasks assigned to agents';
-COMMENT ON TABLE agents IS 'AI agents performing tasks';
-COMMENT ON TABLE cost_records IS 'Claude API usage and cost tracking';
-COMMENT ON TABLE events IS 'System event log';
-COMMENT ON TABLE improvements IS 'Product improvement suggestions';
+COMMENT ON TABLE projects IS 'Maestro projects - each project represents a codebase being orchestrated';
+COMMENT ON TABLE agents IS 'Autonomous agents that execute tasks';
+COMMENT ON TABLE tasks IS 'Work items assigned to agents';
+COMMENT ON TABLE improvements IS 'Suggested improvements identified by the Product Improvement Agent';
+COMMENT ON TABLE cost_records IS 'API cost tracking for Claude usage';
+COMMENT ON TABLE events IS 'System events and audit log';
+COMMENT ON TABLE analysis_history IS 'Historical analysis results from Continuous Analysis Agent';
+COMMENT ON TABLE pattern_library IS 'Detected patterns in tasks, errors, and code';
+COMMENT ON TABLE impact_tracking IS 'Tracks the measured impact of implemented improvements';
+COMMENT ON TABLE code_snapshots IS 'Version snapshots of code before/after changes';
+COMMENT ON TABLE suggestion_quality_metrics IS 'Tracks quality and success of improvement suggestions';

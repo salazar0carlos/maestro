@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { CostTracker } from '@/lib/cost-tracking';
-import { clearAllData } from '@/lib/storage';
+import { clearAllData } from '@/lib/storage-adapter';
 
 type ViewDensity = 'compact' | 'comfortable';
 type ColorScheme = 'blue' | 'purple' | 'green' | 'orange';
@@ -210,10 +210,10 @@ export default function SettingsPage() {
     input.click();
   };
 
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (confirm('⚠️ This will delete ALL data including projects, tasks, and agents. This cannot be undone. Continue?')) {
       if (confirm('Are you absolutely sure? This is permanent!')) {
-        clearAllData();
+        await clearAllData();
         CostTracker.clearRecords();
         localStorage.removeItem('maestro:settings');
         showMessage('All data cleared. Refreshing...');

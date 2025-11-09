@@ -6,7 +6,7 @@
 
 import { Agent, MaestroTask } from './types';
 import { getAgentsByType, getAgentWorkload, getAgentById, setAgentCurrentTask } from './agent-registry';
-import { getTasks, updateTask } from './storage';
+import { getTasks, updateTask } from './storage-adapter';
 
 /**
  * Result of task assignment attempt
@@ -26,12 +26,13 @@ export class TaskRouter {
   /**
    * Find best agent for task and assign it
    */
-  static assignTaskToAgent(task: MaestroTask): AssignmentResult {
+  static async assignTaskToAgent(task: MaestroTask): Promise<AssignmentResult> {
     // Get agent type from task (or infer from task description)
-    const agentType = this.inferAgentType(task);
+    const agentType = await this.inferAgentType(task);
 
     // Get all available agents of this type
-    const availableAgents = getAgentsByType(agentType).filter(
+    const allAgents = await getAgentsByType(agentType);
+    const availableAgents = allAgents.filter(
       agent => agent.status !== 'offline'
     );
 
@@ -44,11 +45,12 @@ export class TaskRouter {
     }
 
     // Score each agent
-    const scored = availableAgents.map(agent => ({
+    const scoredPromises = availableAgents.map(async agent => ({
       agent,
-      score: this.calculateAgentScore(agent, task),
-      breakdown: this.getScoreBreakdown(agent, task),
+      score: await this.calculateAgentScore(agent, task),
+      breakdown: await this.getScoreBreakdown(agent, task),
     }));
+    const scored = await Promise.all(scoredPromises);
 
     // Sort by score (highest first)
     scored.sort((a, b) => b.score - a.score);
@@ -56,7 +58,7 @@ export class TaskRouter {
     const best = scored[0];
 
     // Assign task to best agent
-    const updated = updateTask(task.task_id, {
+    const updated = await updateTask(task.task_id, {
       assigned_to_agent: best.agent.agent_id,
       status: 'todo',
     });
@@ -78,8 +80,8 @@ export class TaskRouter {
   /**
    * Calculate agent score for task assignment (0-100)
    */
-  static calculateAgentScore(agent: Agent, task: MaestroTask): number {
-    const breakdown = this.getScoreBreakdown(agent, task);
+  static async calculateAgentScore(agent: Agent, task: MaestroTask): Promise<number> {
+    const breakdown = await this.getScoreBreakdown(agent, task);
 
     return (
       breakdown.workload +
@@ -92,14 +94,14 @@ export class TaskRouter {
   /**
    * Get detailed score breakdown
    */
-  static getScoreBreakdown(agent: Agent, task: MaestroTask): {
+  static async getScoreBreakdown(agent: Agent, task: MaestroTask): Promise<{
     workload: number;
     successRate: number;
     capabilities: number;
     speed: number;
-  } {
+  }> {
     // Workload score (0-40 points) - prefer agents with lower workload
-    const workload = getAgentWorkload(agent.agent_id);
+    const workload = await getAgentWorkload(agent.agent_id);
     const workloadScore = Math.max(0, (10 - Math.min(workload.todo, 10)) * 4);
 
     // Success rate score (0-30 points)
@@ -148,10 +150,10 @@ export class TaskRouter {
   /**
    * Infer agent type from task
    */
-  static inferAgentType(task: MaestroTask): string {
+  static async inferAgentType(task: MaestroTask): Promise<string> {
     // If task already has an agent assigned, use that agent's type
     if (task.assigned_to_agent) {
-      const agent = getAgentById(task.assigned_to_agent);
+      const agent = await getAgentById(task.assigned_to_agent);
       if (agent && agent.agent_type) {
         return agent.agent_type;
       }
@@ -213,12 +215,12 @@ export class TaskRouter {
   /**
    * Re-assign stuck tasks to different agents
    */
-  static reassignStuckTasks(): AssignmentResult[] {
+  static async reassignStuckTasks(): Promise<AssignmentResult[]> {
     const results: AssignmentResult[] = [];
 
     // Find tasks stuck in progress for >2 hours
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-    const tasks = getTasks();
+    const tasks = await getTasks();
 
     const stuckTasks = tasks.filter(task => {
       if (task.status !== 'in-progress') return false;
@@ -232,21 +234,21 @@ export class TaskRouter {
     for (const task of stuckTasks) {
       // Mark original agent as having an issue
       if (task.assigned_to_agent) {
-        const originalAgent = getAgentById(task.assigned_to_agent);
+        const originalAgent = await getAgentById(task.assigned_to_agent);
         if (originalAgent) {
           // Clear current task
-          setAgentCurrentTask(task.assigned_to_agent, undefined);
+          await setAgentCurrentTask(task.assigned_to_agent, undefined);
         }
       }
 
       // Reset task to todo status
-      updateTask(task.task_id, {
+      await updateTask(task.task_id, {
         status: 'todo',
         assigned_to_agent: '', // Clear assignment
       });
 
       // Assign to new agent
-      const result = this.assignTaskToAgent(task);
+      const result = await this.assignTaskToAgent(task);
       results.push(result);
     }
 
@@ -256,59 +258,75 @@ export class TaskRouter {
   /**
    * Batch assign multiple tasks
    */
-  static batchAssignTasks(tasks: MaestroTask[]): AssignmentResult[] {
-    return tasks.map(task => this.assignTaskToAgent(task));
+  static async batchAssignTasks(tasks: MaestroTask[]): Promise<AssignmentResult[]> {
+    const results: AssignmentResult[] = [];
+    for (const task of tasks) {
+      results.push(await this.assignTaskToAgent(task));
+    }
+    return results;
   }
 
   /**
    * Get task assignment recommendations for unassigned tasks
    */
-  static getAssignmentRecommendations(): Array<{
+  static async getAssignmentRecommendations(): Promise<Array<{
     task: MaestroTask;
     recommendedAgent: Agent | null;
     score: number;
     reason: string;
-  }> {
-    const unassignedTasks = getTasks().filter(
+  }>> {
+    const allTasks = await getTasks();
+    const unassignedTasks = allTasks.filter(
       task => task.status === 'todo' && !task.assigned_to_agent
     );
 
-    return unassignedTasks.map(task => {
-      const agentType = this.inferAgentType(task);
-      const availableAgents = getAgentsByType(agentType);
+    const recommendations: Array<{
+      task: MaestroTask;
+      recommendedAgent: Agent | null;
+      score: number;
+      reason: string;
+    }> = [];
+
+    for (const task of unassignedTasks) {
+      const agentType = await this.inferAgentType(task);
+      const availableAgents = await getAgentsByType(agentType);
 
       if (availableAgents.length === 0) {
-        return {
+        recommendations.push({
           task,
           recommendedAgent: null,
           score: 0,
           reason: `No agents available for type: ${agentType}`,
-        };
+        });
+        continue;
       }
 
-      const scored = availableAgents.map(agent => ({
+      const scoredPromises = availableAgents.map(async agent => ({
         agent,
-        score: this.calculateAgentScore(agent, task),
+        score: await this.calculateAgentScore(agent, task),
       }));
+      const scored = await Promise.all(scoredPromises);
 
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
 
-      return {
+      recommendations.push({
         task,
         recommendedAgent: best.agent,
         score: best.score,
         reason: `Best match based on workload, success rate, and capabilities`,
-      };
-    });
+      });
+    }
+
+    return recommendations;
   }
 }
 
 /**
  * Quick helper to assign a single task
  */
-export function assignTask(taskId: string): AssignmentResult {
-  const tasks = getTasks();
+export async function assignTask(taskId: string): Promise<AssignmentResult> {
+  const tasks = await getTasks();
   const task = tasks.find(t => t.task_id === taskId);
 
   if (!task) {
@@ -318,12 +336,12 @@ export function assignTask(taskId: string): AssignmentResult {
     };
   }
 
-  return TaskRouter.assignTaskToAgent(task);
+  return await TaskRouter.assignTaskToAgent(task);
 }
 
 /**
  * Quick helper to reassign stuck tasks
  */
-export function reassignStuckTasks(): AssignmentResult[] {
-  return TaskRouter.reassignStuckTasks();
+export async function reassignStuckTasks(): Promise<AssignmentResult[]> {
+  return await TaskRouter.reassignStuckTasks();
 }

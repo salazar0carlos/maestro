@@ -6,7 +6,7 @@
  */
 
 import { supabase } from './supabase';
-import type { Project, MaestroTask, Agent } from './types';
+import type { Project, MaestroTask, Agent, ImprovementSuggestion } from './types';
 
 // ============ PROJECT STORAGE ============
 
@@ -346,4 +346,110 @@ export async function getAgentStats(agentId: string) {
     todo,
     blocked,
   };
+}
+
+// ============ IMPROVEMENT STORAGE ============
+
+export async function getImprovements(): Promise<ImprovementSuggestion[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .order('created_date', { ascending: false });
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvements:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getImprovement(improvementId: string): Promise<ImprovementSuggestion | null> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('improvement_id', improvementId)
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvement:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getProjectImprovements(projectId: string): Promise<ImprovementSuggestion[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_date', { ascending: false });
+
+  if (error) {
+    console.error('[storage-db] Error fetching project improvements:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getImprovementsByStatus(projectId: string, status: string): Promise<ImprovementSuggestion[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('status', status);
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvements by status:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function createImprovement(improvement: ImprovementSuggestion): Promise<ImprovementSuggestion> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .insert([improvement])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error creating improvement:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateImprovement(improvementId: string, updates: Partial<ImprovementSuggestion>): Promise<ImprovementSuggestion | null> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .update(updates)
+    .eq('improvement_id', improvementId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error updating improvement:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function deleteImprovement(improvementId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('improvements')
+    .delete()
+    .eq('improvement_id', improvementId);
+
+  if (error) {
+    console.error('[storage-db] Error deleting improvement:', error);
+    return false;
+  }
+
+  return true;
 }
