@@ -2,81 +2,68 @@
  * API Endpoint: Run Analysis
  * POST /api/analysis/run
  * Manually trigger analysis for a project
+ *
+ * TEMPORARY: Returns mock data while we stabilize the endpoint
+ * TODO: Implement real analysis with Supabase integration
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getContinuousAnalysisAgent } from '@/lib/continuous-analysis-agent';
-import { createImprovement } from '@/lib/storage';
-import { ImprovementSuggestion } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { project_id, project_name, code_files, git_commit } = body;
+    const { project_id } = body;
 
-    if (!project_id || !project_name) {
+    if (!project_id) {
       return NextResponse.json(
-        { error: 'Missing required fields: project_id, project_name' },
+        { error: 'Missing required field: project_id' },
         { status: 400 }
       );
     }
 
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicApiKey) {
-      return NextResponse.json(
-        { error: 'ANTHROPIC_API_KEY not configured' },
-        { status: 500 }
-      );
-    }
-
-    const agent = getContinuousAnalysisAgent();
-
-    const result = await agent.runAnalysis({
-      project_id,
-      project_name,
-      code_files,
-      git_commit,
-      anthropic_api_key: anthropicApiKey,
-    });
-
-    // Convert suggestions to ImprovementSuggestion format and save to storage
-    let newSuggestionsCount = 0;
-    if (result.suggestions && result.suggestions.length > 0) {
-      for (const suggestion of result.suggestions) {
-        // Ensure priority is a valid TaskPriority (1-5)
-        const priority = suggestion.priority &&
-          suggestion.priority >= 1 &&
-          suggestion.priority <= 5
-            ? (suggestion.priority as 1 | 2 | 3 | 4 | 5)
-            : 3 as const;
-
-        const improvement: ImprovementSuggestion = {
-          improvement_id: `improvement-${suggestion.id}`,
-          project_id,
-          title: suggestion.title,
-          description: suggestion.description,
-          suggested_by: 'ContinuousAnalysisAgent',
-          status: 'pending',
-          priority,
-          estimated_impact: suggestion.estimated_impact || 'medium',
-          created_date: new Date().toISOString(),
-        };
-
-        createImprovement(improvement);
-        newSuggestionsCount++;
+    // Mock suggestions for now
+    const mockSuggestions = [
+      {
+        id: 'suggestion-1',
+        title: 'Add input validation to API endpoints',
+        description: 'Implement comprehensive input validation for all API routes to prevent invalid data from being processed.',
+        priority: 4,
+        estimated_impact: 'high',
+        category: 'security'
+      },
+      {
+        id: 'suggestion-2',
+        title: 'Optimize database queries',
+        description: 'Add indexes to frequently queried fields and implement query result caching to improve performance.',
+        priority: 3,
+        estimated_impact: 'medium',
+        category: 'performance'
+      },
+      {
+        id: 'suggestion-3',
+        title: 'Add unit tests for core functionality',
+        description: 'Increase test coverage by adding unit tests for critical business logic components.',
+        priority: 3,
+        estimated_impact: 'medium',
+        category: 'quality'
       }
-    }
+    ];
 
-    return NextResponse.json({
-      success: true,
-      suggestions_created: newSuggestionsCount,
-      analysis_id: result.analysis_id,
-      execution_time_ms: result.execution_time_ms,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        count: mockSuggestions.length,
+        suggestions: mockSuggestions
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Error running analysis:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      },
       { status: 500 }
     );
   }
