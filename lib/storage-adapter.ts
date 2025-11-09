@@ -249,3 +249,193 @@ export async function clearAllData(): Promise<void> {
 export function getStorageType(): 'database' | 'localStorage' {
   return isDatabaseConfigured() ? 'database' : 'localStorage';
 }
+
+// ============ IMPROVEMENT SUGGESTIONS STORAGE ============
+
+export async function getImprovements(): Promise<any[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovements();
+  } else {
+    return Promise.resolve(storage.getImprovements());
+  }
+}
+
+export async function getImprovement(improvementId: string): Promise<any | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovement(improvementId);
+  } else {
+    return Promise.resolve(storage.getImprovement(improvementId));
+  }
+}
+
+export async function getProjectImprovements(projectId: string): Promise<any[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getProjectImprovements(projectId);
+  } else {
+    return Promise.resolve(storage.getProjectImprovements(projectId));
+  }
+}
+
+export async function getImprovementsByStatus(projectId: string, status: string): Promise<any[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getImprovementsByStatus(projectId, status);
+  } else {
+    return Promise.resolve(storage.getImprovementsByStatus(projectId, status));
+  }
+}
+
+export async function createImprovement(improvement: any): Promise<any> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.createImprovement(improvement);
+  } else {
+    return Promise.resolve(storage.createImprovement(improvement));
+  }
+}
+
+export async function updateImprovement(improvementId: string, updates: any): Promise<any | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.updateImprovement(improvementId, updates);
+  } else {
+    return Promise.resolve(storage.updateImprovement(improvementId, updates));
+  }
+}
+
+export async function deleteImprovement(improvementId: string): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.deleteImprovement(improvementId);
+  } else {
+    return Promise.resolve(storage.deleteImprovement(improvementId));
+  }
+}
+
+// ============ ALERTS STORAGE ============
+
+export async function getAlerts(): Promise<any[]> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getAlerts();
+  } else {
+    // For localStorage, need to implement a simple getter
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem('maestro:alerts');
+      return Promise.resolve(data ? JSON.parse(data) : []);
+    }
+    return Promise.resolve([]);
+  }
+}
+
+export async function saveAlert(alert: any): Promise<any> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.saveAlert(alert);
+  } else {
+    // For localStorage, implement simple save
+    if (typeof window !== 'undefined') {
+      const alerts = await getAlerts();
+      alerts.unshift(alert);
+      // Keep only last 100 alerts
+      const limited = alerts.slice(0, 100);
+      localStorage.setItem('maestro:alerts', JSON.stringify(limited));
+      return Promise.resolve(alert);
+    }
+    return Promise.resolve(alert);
+  }
+}
+
+export async function clearAlerts(): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.clearAlerts();
+  } else {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('maestro:alerts');
+    }
+    return Promise.resolve(true);
+  }
+}
+
+// ============ SETTINGS STORAGE ============
+
+export async function getSettings(userId: string = 'default'): Promise<any | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getSettings(userId);
+  } else {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem('maestro:settings');
+      return Promise.resolve(data ? JSON.parse(data) : null);
+    }
+    return Promise.resolve(null);
+  }
+}
+
+export async function saveSettings(settings: any, userId: string = 'default'): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.saveSettings(settings, userId);
+  } else {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('maestro:settings', JSON.stringify(settings));
+    }
+    return Promise.resolve(true);
+  }
+}
+
+export async function getProjectSettings(projectId: string): Promise<any | null> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getProjectSettings(projectId);
+  } else {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem(`project_settings_${projectId}`);
+      return Promise.resolve(data ? JSON.parse(data) : null);
+    }
+    return Promise.resolve(null);
+  }
+}
+
+export async function saveProjectSettings(projectId: string, settings: any): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.saveProjectSettings(projectId, settings);
+  } else {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`project_settings_${projectId}`, JSON.stringify(settings));
+    }
+    return Promise.resolve(true);
+  }
+}
+
+// ============ AGENT REGISTRY STORAGE ============
+
+export async function getAgentRegistry(): Promise<any> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.getAgentRegistry();
+  } else {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem('maestro:agent_registry');
+      return Promise.resolve(data ? JSON.parse(data) : {});
+    }
+    return Promise.resolve({});
+  }
+}
+
+export async function saveAgentRegistry(registry: any): Promise<boolean> {
+  const { storage, type } = await getStorage();
+  if (type === 'database') {
+    return storage.saveAgentRegistry(registry);
+  } else {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('maestro:agent_registry', JSON.stringify(registry));
+    }
+    return Promise.resolve(true);
+  }
+}

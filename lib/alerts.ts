@@ -8,9 +8,8 @@ import { Alert } from './types';
 import { AgentHealthMonitor } from './agent-health';
 import { BottleneckDetector } from './bottleneck-detection';
 import { getAllAgents } from './agent-registry';
-import { getTasks } from './storage';
+import { getTasks, getAlerts as getAlertsFromStorage, saveAlert as saveAlertToStorage, clearAlerts as clearAlertsFromStorage } from './storage-adapter';
 
-const ALERTS_STORAGE_KEY = 'maestro:alerts';
 const ALERT_RATE_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
@@ -20,13 +19,13 @@ export class AlertSystem {
   /**
    * Generate all alerts based on current system state
    */
-  static generateAlerts(): Alert[] {
+  static async generateAlerts(): Promise<Alert[]> {
     const alerts: Alert[] = [];
     const now = new Date().toISOString();
 
     // Critical: All agents offline
-    const allAgents = getAllAgents();
-    const offlineAgents = AgentHealthMonitor.getOfflineAgents();
+    const allAgents = await getAllAgents();
+    const offlineAgents = await AgentHealthMonitor.getOfflineAgents();
 
     if (allAgents.length > 0 && offlineAgents.length === allAgents.length) {
       const alert: Alert = {
@@ -37,15 +36,16 @@ export class AlertSystem {
         timestamp: now,
       };
 
-      if (this.shouldSendAlert(alert)) {
+      if (await this.shouldSendAlert(alert)) {
         alerts.push(alert);
-        this.saveAlert(alert);
+        await this.saveAlert(alert);
       }
     }
 
     // High: Critical tasks blocked >24h
-    const blockedTasks = getTasks().filter(t => t.status === 'blocked');
-    const criticalBlockedTasks = blockedTasks.filter(task => {
+    const allTasks = await getTasks();
+    const blockedTasks = allTasks.filter((t: any) => t.status === 'blocked');
+    const criticalBlockedTasks = blockedTasks.filter((task: any) => {
       const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
       // Check if high priority (1 or 2)
@@ -67,21 +67,21 @@ export class AlertSystem {
         message: `${criticalBlockedTasks.length} critical task${
           criticalBlockedTasks.length > 1 ? 's' : ''
         } blocked >24h`,
-        tasks: criticalBlockedTasks.map(t => t.task_id),
+        tasks: criticalBlockedTasks.map((t: any) => t.task_id),
         action: 'Review blocked tasks and provide guidance',
         timestamp: now,
       };
 
-      if (this.shouldSendAlert(alert)) {
+      if (await this.shouldSendAlert(alert)) {
         alerts.push(alert);
-        this.saveAlert(alert);
+        await this.saveAlert(alert);
       }
     }
 
     // Medium: Error rate >50%
-    const recentTasks = this.getRecentTasks(24); // last 24h
+    const recentTasks = await this.getRecentTasks(24); // last 24h
     if (recentTasks.length > 10) {
-      const failed = recentTasks.filter(t => t.status === 'blocked').length;
+      const failed = recentTasks.filter((t: any) => t.status === 'blocked').length;
       const errorRate = failed / recentTasks.length;
 
       if (errorRate > 0.5) {
@@ -95,15 +95,15 @@ export class AlertSystem {
           timestamp: now,
         };
 
-        if (this.shouldSendAlert(alert)) {
+        if (await this.shouldSendAlert(alert)) {
           alerts.push(alert);
-          this.saveAlert(alert);
+          await this.saveAlert(alert);
         }
       }
     }
 
     // Low: Bottleneck detected
-    const bottlenecks = BottleneckDetector.detectBottlenecks();
+    const bottlenecks = await BottleneckDetector.detectBottlenecks();
     if (bottlenecks.length > 0) {
       const alert: Alert = {
         severity: 'low',
@@ -116,14 +116,14 @@ export class AlertSystem {
         timestamp: now,
       };
 
-      if (this.shouldSendAlert(alert)) {
+      if (await this.shouldSendAlert(alert)) {
         alerts.push(alert);
-        this.saveAlert(alert);
+        await this.saveAlert(alert);
       }
     }
 
     // High: Multiple stuck agents
-    const stuckAgents = AgentHealthMonitor.getStuckAgents();
+    const stuckAgents = await AgentHealthMonitor.getStuckAgents();
     if (stuckAgents.length >= 3) {
       const alert: Alert = {
         severity: 'high',
@@ -133,14 +133,14 @@ export class AlertSystem {
         timestamp: now,
       };
 
-      if (this.shouldSendAlert(alert)) {
+      if (await this.shouldSendAlert(alert)) {
         alerts.push(alert);
-        this.saveAlert(alert);
+        await this.saveAlert(alert);
       }
     }
 
     // Critical: System health critical
-    const systemHealth = AgentHealthMonitor.getSystemHealth();
+    const systemHealth = await AgentHealthMonitor.getSystemHealth();
     if (systemHealth.status === 'critical') {
       const alert: Alert = {
         severity: 'critical',
@@ -150,9 +150,9 @@ export class AlertSystem {
         timestamp: now,
       };
 
-      if (this.shouldSendAlert(alert)) {
+      if (await this.shouldSendAlert(alert)) {
         alerts.push(alert);
-        this.saveAlert(alert);
+        await this.saveAlert(alert);
       }
     }
 
@@ -162,11 +162,11 @@ export class AlertSystem {
   /**
    * Get recent tasks (within last N hours)
    */
-  static getRecentTasks(hours: number) {
+  static async getRecentTasks(hours: number): Promise<any[]> {
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    const tasks = getTasks();
+    const tasks = await getTasks();
 
-    return tasks.filter(task => {
+    return tasks.filter((task: any) => {
       const taskDate = new Date(task.created_date).getTime();
       return taskDate > cutoff;
     });
@@ -175,11 +175,11 @@ export class AlertSystem {
   /**
    * Check if alert should be sent (rate limiting)
    */
-  static shouldSendAlert(alert: Alert): boolean {
-    const recentAlerts = this.getRecentAlerts();
+  static async shouldSendAlert(alert: Alert): Promise<boolean> {
+    const recentAlerts = await this.getRecentAlerts();
 
     // Check if same alert type was sent recently
-    const similarAlert = recentAlerts.find(a => {
+    const similarAlert = recentAlerts.find((a: Alert) => {
       if (a.type !== alert.type) return false;
 
       const alertTime = new Date(a.timestamp).getTime();
@@ -194,17 +194,9 @@ export class AlertSystem {
   /**
    * Save alert to history
    */
-  static saveAlert(alert: Alert): void {
-    if (typeof window === 'undefined') return;
-
+  static async saveAlert(alert: Alert): Promise<void> {
     try {
-      const alerts = this.getAlerts();
-      alerts.unshift(alert);
-
-      // Keep last 100 alerts
-      const trimmed = alerts.slice(0, 100);
-
-      localStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(trimmed));
+      await saveAlertToStorage(alert);
     } catch (error) {
       console.error('Failed to save alert:', error);
     }
@@ -213,12 +205,9 @@ export class AlertSystem {
   /**
    * Get all alerts from history
    */
-  static getAlerts(): Alert[] {
-    if (typeof window === 'undefined') return [];
-
+  static async getAlerts(): Promise<Alert[]> {
     try {
-      const data = localStorage.getItem(ALERTS_STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+      return await getAlertsFromStorage();
     } catch {
       return [];
     }
@@ -227,11 +216,11 @@ export class AlertSystem {
   /**
    * Get recent alerts (within last N hours)
    */
-  static getRecentAlerts(hours: number = 24): Alert[] {
+  static async getRecentAlerts(hours: number = 24): Promise<Alert[]> {
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    const alerts = this.getAlerts();
+    const alerts = await this.getAlerts();
 
-    return alerts.filter(alert => {
+    return alerts.filter((alert: Alert) => {
       const alertTime = new Date(alert.timestamp).getTime();
       return alertTime > cutoff;
     });
@@ -240,33 +229,37 @@ export class AlertSystem {
   /**
    * Get alerts by severity
    */
-  static getAlertsBySeverity(severity: 'critical' | 'high' | 'medium' | 'low'): Alert[] {
-    return this.getAlerts().filter(a => a.severity === severity);
+  static async getAlertsBySeverity(severity: 'critical' | 'high' | 'medium' | 'low'): Promise<Alert[]> {
+    const alerts = await this.getAlerts();
+    return alerts.filter((a: Alert) => a.severity === severity);
   }
 
   /**
    * Get alerts by type
    */
-  static getAlertsByType(type: string): Alert[] {
-    return this.getAlerts().filter(a => a.type === type);
+  static async getAlertsByType(type: string): Promise<Alert[]> {
+    const alerts = await this.getAlerts();
+    return alerts.filter((a: Alert) => a.type === type);
   }
 
   /**
    * Clear old alerts (older than N days)
    */
-  static clearOldAlerts(days: number = 7): void {
-    if (typeof window === 'undefined') return;
-
+  static async clearOldAlerts(days: number = 7): Promise<void> {
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    const alerts = this.getAlerts();
+    const alerts = await this.getAlerts();
 
-    const filtered = alerts.filter(alert => {
+    const filtered = alerts.filter((alert: Alert) => {
       const alertTime = new Date(alert.timestamp).getTime();
       return alertTime > cutoff;
     });
 
     try {
-      localStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(filtered));
+      // Clear and re-add filtered alerts
+      await clearAlertsFromStorage();
+      for (const alert of filtered) {
+        await saveAlertToStorage(alert);
+      }
     } catch (error) {
       console.error('Failed to clear old alerts:', error);
     }
@@ -275,23 +268,23 @@ export class AlertSystem {
   /**
    * Get alert summary
    */
-  static getAlertSummary(): {
+  static async getAlertSummary(): Promise<{
     total: number;
     critical: number;
     high: number;
     medium: number;
     low: number;
     last24h: number;
-  } {
-    const allAlerts = this.getAlerts();
-    const recentAlerts = this.getRecentAlerts(24);
+  }> {
+    const allAlerts = await this.getAlerts();
+    const recentAlerts = await this.getRecentAlerts(24);
 
     return {
       total: allAlerts.length,
-      critical: allAlerts.filter(a => a.severity === 'critical').length,
-      high: allAlerts.filter(a => a.severity === 'high').length,
-      medium: allAlerts.filter(a => a.severity === 'medium').length,
-      low: allAlerts.filter(a => a.severity === 'low').length,
+      critical: allAlerts.filter((a: Alert) => a.severity === 'critical').length,
+      high: allAlerts.filter((a: Alert) => a.severity === 'high').length,
+      medium: allAlerts.filter((a: Alert) => a.severity === 'medium').length,
+      low: allAlerts.filter((a: Alert) => a.severity === 'low').length,
       last24h: recentAlerts.length,
     };
   }
@@ -299,22 +292,23 @@ export class AlertSystem {
   /**
    * Check if there are any active critical alerts
    */
-  static hasCriticalAlerts(): boolean {
-    const recentAlerts = this.getRecentAlerts(1); // Last hour
-    return recentAlerts.some(a => a.severity === 'critical');
+  static async hasCriticalAlerts(): Promise<boolean> {
+    const recentAlerts = await this.getRecentAlerts(1); // Last hour
+    return recentAlerts.some((a: Alert) => a.severity === 'critical');
   }
 
   /**
    * Dismiss/acknowledge an alert
    */
-  static dismissAlert(timestamp: string): void {
-    if (typeof window === 'undefined') return;
-
+  static async dismissAlert(timestamp: string): Promise<void> {
     try {
-      const alerts = this.getAlerts();
-      const filtered = alerts.filter(a => a.timestamp !== timestamp);
+      const alerts = await this.getAlerts();
+      const filtered = alerts.filter((a: Alert) => a.timestamp !== timestamp);
 
-      localStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(filtered));
+      await clearAlertsFromStorage();
+      for (const alert of filtered) {
+        await saveAlertToStorage(alert);
+      }
     } catch (error) {
       console.error('Failed to dismiss alert:', error);
     }
@@ -323,11 +317,9 @@ export class AlertSystem {
   /**
    * Clear all alerts
    */
-  static clearAllAlerts(): void {
-    if (typeof window === 'undefined') return;
-
+  static async clearAllAlerts(): Promise<void> {
     try {
-      localStorage.removeItem(ALERTS_STORAGE_KEY);
+      await clearAlertsFromStorage();
     } catch (error) {
       console.error('Failed to clear alerts:', error);
     }
@@ -337,27 +329,27 @@ export class AlertSystem {
 /**
  * Quick helper to generate alerts
  */
-export function generateAlerts(): Alert[] {
-  return AlertSystem.generateAlerts();
+export async function generateAlerts(): Promise<Alert[]> {
+  return await AlertSystem.generateAlerts();
 }
 
 /**
  * Quick helper to get alerts
  */
-export function getAlerts(): Alert[] {
-  return AlertSystem.getAlerts();
+export async function getAlerts(): Promise<Alert[]> {
+  return await AlertSystem.getAlerts();
 }
 
 /**
  * Quick helper to get alert summary
  */
-export function getAlertSummary() {
-  return AlertSystem.getAlertSummary();
+export async function getAlertSummary() {
+  return await AlertSystem.getAlertSummary();
 }
 
 /**
  * Quick helper to check for critical alerts
  */
-export function hasCriticalAlerts(): boolean {
-  return AlertSystem.hasCriticalAlerts();
+export async function hasCriticalAlerts(): Promise<boolean> {
+  return await AlertSystem.hasCriticalAlerts();
 }

@@ -347,3 +347,279 @@ export async function getAgentStats(agentId: string) {
     blocked,
   };
 }
+
+// ============ IMPROVEMENT SUGGESTIONS STORAGE ============
+
+export async function getImprovements(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .order('created_date', { ascending: false });
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvements:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getImprovement(improvementId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('improvement_id', improvementId)
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvement:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getProjectImprovements(projectId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('priority', { ascending: true });
+
+  if (error) {
+    console.error('[storage-db] Error fetching project improvements:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getImprovementsByStatus(projectId: string, status: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('status', status);
+
+  if (error) {
+    console.error('[storage-db] Error fetching improvements by status:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function createImprovement(improvement: any): Promise<any> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .insert([improvement])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error creating improvement:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateImprovement(improvementId: string, updates: any): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('improvements')
+    .update(updates)
+    .eq('improvement_id', improvementId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error updating improvement:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function deleteImprovement(improvementId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('improvements')
+    .delete()
+    .eq('improvement_id', improvementId);
+
+  if (error) {
+    console.error('[storage-db] Error deleting improvement:', error);
+    return false;
+  }
+
+  return true;
+}
+
+// ============ ALERTS STORAGE ============
+
+export async function getAlerts(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
+    .order('timestamp', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('[storage-db] Error fetching alerts:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function saveAlert(alert: any): Promise<any> {
+  const { data, error } = await supabase
+    .from('alerts')
+    .insert([{ ...alert, id: undefined }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[storage-db] Error saving alert:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function clearAlerts(): Promise<boolean> {
+  const { error } = await supabase
+    .from('alerts')
+    .delete()
+    .gte('id', 0);
+
+  if (error) {
+    console.error('[storage-db] Error clearing alerts:', error);
+    return false;
+  }
+
+  return true;
+}
+
+// ============ SETTINGS STORAGE ============
+
+export async function getSettings(userId: string = 'default'): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No settings found, return default settings
+      return {
+        defaultAgentType: 'Backend',
+        defaultTaskPriority: '3',
+        autoApproveLowRisk: false,
+        emailNotifications: false,
+        emailAddress: '',
+        slackWebhook: '',
+        discordWebhook: '',
+        viewDensity: 'comfortable',
+        colorScheme: 'blue',
+      };
+    }
+    console.error('[storage-db] Error fetching settings:', error);
+    return null;
+  }
+
+  return data?.settings || null;
+}
+
+export async function saveSettings(settings: any, userId: string = 'default'): Promise<boolean> {
+  const { error } = await supabase
+    .from('settings')
+    .upsert([{ user_id: userId, settings, updated_at: new Date().toISOString() }], {
+      onConflict: 'user_id',
+    });
+
+  if (error) {
+    console.error('[storage-db] Error saving settings:', error);
+    return false;
+  }
+
+  return true;
+}
+
+export async function getProjectSettings(projectId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('project_settings')
+    .select('*')
+    .eq('project_id', projectId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No settings found, return default project settings
+      return {
+        intelligenceLayerEnabled: true,
+        autoAssignTasks: false,
+        notificationsEnabled: true,
+        agentSpawnThreshold: 5,
+        maxConcurrentTasks: 3,
+        priorityRules: 'manual',
+        requireApproval: true,
+      };
+    }
+    console.error('[storage-db] Error fetching project settings:', error);
+    return null;
+  }
+
+  return data?.settings || null;
+}
+
+export async function saveProjectSettings(projectId: string, settings: any): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_settings')
+    .upsert([{ project_id: projectId, settings, updated_at: new Date().toISOString() }], {
+      onConflict: 'project_id',
+    });
+
+  if (error) {
+    console.error('[storage-db] Error saving project settings:', error);
+    return false;
+  }
+
+  return true;
+}
+
+// ============ AGENT REGISTRY STORAGE ============
+
+export async function getAgentRegistry(): Promise<any> {
+  const { data, error } = await supabase
+    .from('agent_registry')
+    .select('*')
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No registry found, return empty
+      return {};
+    }
+    console.error('[storage-db] Error fetching agent registry:', error);
+    return {};
+  }
+
+  return data?.registry || {};
+}
+
+export async function saveAgentRegistry(registry: any): Promise<boolean> {
+  const { error } = await supabase
+    .from('agent_registry')
+    .upsert([{ id: 1, registry, updated_at: new Date().toISOString() }], {
+      onConflict: 'id',
+    });
+
+  if (error) {
+    console.error('[storage-db] Error saving agent registry:', error);
+    return false;
+  }
+
+  return true;
+}

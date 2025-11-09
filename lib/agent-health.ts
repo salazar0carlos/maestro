@@ -6,7 +6,7 @@
 
 import { Agent, SystemHealth } from './types';
 import { getAllAgents, getAgentById } from './agent-registry';
-import { getTask } from './storage';
+import { getTask } from './storage-adapter';
 
 /**
  * Agent Health Monitor - Main class for health monitoring
@@ -15,14 +15,14 @@ export class AgentHealthMonitor {
   /**
    * Detect agents that are stuck (in progress >30 min with no updates)
    */
-  static getStuckAgents(): Agent[] {
-    const agents = getAllAgents();
+  static async getStuckAgents(): Promise<Agent[]> {
+    const agents = await getAllAgents();
     const stuckAgents: Agent[] = [];
 
     for (const agent of agents) {
       if (agent.status !== 'active' || !agent.current_task_id) continue;
 
-      const task = getTask(agent.current_task_id);
+      const task = await getTask(agent.current_task_id);
       if (!task) continue;
 
       // Check if task is in progress for >30 minutes
@@ -44,20 +44,20 @@ export class AgentHealthMonitor {
   /**
    * Detect idle agents (active status but no current task)
    */
-  static getIdleAgents(): Agent[] {
-    const agents = getAllAgents();
+  static async getIdleAgents(): Promise<Agent[]> {
+    const agents = await getAllAgents();
 
-    return agents.filter(agent => agent.status === 'active' && !agent.current_task_id);
+    return agents.filter((agent: Agent) => agent.status === 'active' && !agent.current_task_id);
   }
 
   /**
    * Detect offline agents (no poll in last 5 minutes)
    */
-  static getOfflineAgents(): Agent[] {
-    const agents = getAllAgents();
+  static async getOfflineAgents(): Promise<Agent[]> {
+    const agents = await getAllAgents();
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
-    return agents.filter(agent => {
+    return agents.filter((agent: Agent) => {
       if (!agent.last_poll_date) return true; // Never polled = offline
 
       const lastPoll = new Date(agent.last_poll_date).getTime();
@@ -68,12 +68,12 @@ export class AgentHealthMonitor {
   /**
    * Get healthy agents (health score > 70, not offline, not stuck)
    */
-  static getHealthyAgents(): Agent[] {
-    const agents = getAllAgents();
-    const offlineAgents = new Set(this.getOfflineAgents().map(a => a.agent_id));
-    const stuckAgents = new Set(this.getStuckAgents().map(a => a.agent_id));
+  static async getHealthyAgents(): Promise<Agent[]> {
+    const agents = await getAllAgents();
+    const offlineAgents = new Set((await this.getOfflineAgents()).map((a: Agent) => a.agent_id));
+    const stuckAgents = new Set((await this.getStuckAgents()).map((a: Agent) => a.agent_id));
 
-    return agents.filter(agent => {
+    return agents.filter((agent: Agent) => {
       if (offlineAgents.has(agent.agent_id)) return false;
       if (stuckAgents.has(agent.agent_id)) return false;
 
@@ -85,8 +85,8 @@ export class AgentHealthMonitor {
   /**
    * Get overall system health
    */
-  static getSystemHealth(): SystemHealth {
-    const allAgents = getAllAgents();
+  static async getSystemHealth(): Promise<SystemHealth> {
+    const allAgents = await getAllAgents();
 
     if (allAgents.length === 0) {
       return {
@@ -99,9 +99,9 @@ export class AgentHealthMonitor {
       };
     }
 
-    const healthy = this.getHealthyAgents().length;
-    const stuck = this.getStuckAgents().length;
-    const offline = this.getOfflineAgents().length;
+    const healthy = (await this.getHealthyAgents()).length;
+    const stuck = (await this.getStuckAgents()).length;
+    const offline = (await this.getOfflineAgents()).length;
 
     const healthPercentage = (healthy / allAgents.length) * 100;
 
@@ -127,13 +127,13 @@ export class AgentHealthMonitor {
   /**
    * Get detailed health report for a specific agent
    */
-  static getAgentHealthReport(agentId: string): {
+  static async getAgentHealthReport(agentId: string): Promise<{
     agent: Agent | null;
     status: 'healthy' | 'idle' | 'stuck' | 'offline';
     issues: string[];
     recommendations: string[];
-  } {
-    const agent = getAgentById(agentId);
+  }> {
+    const agent = await getAgentById(agentId);
 
     if (!agent) {
       return {
@@ -149,8 +149,8 @@ export class AgentHealthMonitor {
     let status: 'healthy' | 'idle' | 'stuck' | 'offline' = 'healthy';
 
     // Check if offline
-    const offlineAgents = this.getOfflineAgents();
-    if (offlineAgents.some(a => a.agent_id === agentId)) {
+    const offlineAgents = await this.getOfflineAgents();
+    if (offlineAgents.some((a: Agent) => a.agent_id === agentId)) {
       status = 'offline';
       issues.push('Agent has not polled in over 5 minutes');
       recommendations.push('Restart the agent process');
@@ -158,8 +158,8 @@ export class AgentHealthMonitor {
     }
 
     // Check if stuck
-    const stuckAgents = this.getStuckAgents();
-    if (stuckAgents.some(a => a.agent_id === agentId)) {
+    const stuckAgents = await this.getStuckAgents();
+    if (stuckAgents.some((a: Agent) => a.agent_id === agentId)) {
       status = 'stuck';
       issues.push('Agent has been working on a task for >30 minutes');
       recommendations.push('Review the current task for complexity or errors');
@@ -167,8 +167,8 @@ export class AgentHealthMonitor {
     }
 
     // Check if idle
-    const idleAgents = this.getIdleAgents();
-    if (idleAgents.some(a => a.agent_id === agentId)) {
+    const idleAgents = await this.getIdleAgents();
+    if (idleAgents.some((a: Agent) => a.agent_id === agentId)) {
       status = 'idle';
       issues.push('Agent is active but has no tasks assigned');
       recommendations.push('Assign tasks to this agent');
@@ -202,19 +202,19 @@ export class AgentHealthMonitor {
   /**
    * Run health check on all agents and return summary
    */
-  static runHealthCheck(): {
+  static async runHealthCheck(): Promise<{
     systemHealth: SystemHealth;
     healthyAgents: Agent[];
     idleAgents: Agent[];
     stuckAgents: Agent[];
     offlineAgents: Agent[];
     criticalIssues: string[];
-  } {
-    const systemHealth = this.getSystemHealth();
-    const healthyAgents = this.getHealthyAgents();
-    const idleAgents = this.getIdleAgents();
-    const stuckAgents = this.getStuckAgents();
-    const offlineAgents = this.getOfflineAgents();
+  }> {
+    const systemHealth = await this.getSystemHealth();
+    const healthyAgents = await this.getHealthyAgents();
+    const idleAgents = await this.getIdleAgents();
+    const stuckAgents = await this.getStuckAgents();
+    const offlineAgents = await this.getOfflineAgents();
 
     const criticalIssues: string[] = [];
 
@@ -244,17 +244,25 @@ export class AgentHealthMonitor {
   /**
    * Check if a specific agent needs attention
    */
-  static agentNeedsAttention(agentId: string): boolean {
-    const report = this.getAgentHealthReport(agentId);
+  static async agentNeedsAttention(agentId: string): Promise<boolean> {
+    const report = await this.getAgentHealthReport(agentId);
     return report.issues.length > 0;
   }
 
   /**
    * Get agents that need attention
    */
-  static getAgentsNeedingAttention(): Agent[] {
-    const allAgents = getAllAgents();
-    return allAgents.filter(agent => this.agentNeedsAttention(agent.agent_id));
+  static async getAgentsNeedingAttention(): Promise<Agent[]> {
+    const allAgents = await getAllAgents();
+    const results: Agent[] = [];
+
+    for (const agent of allAgents) {
+      if (await this.agentNeedsAttention(agent.agent_id)) {
+        results.push(agent);
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -292,34 +300,34 @@ export class AgentHealthMonitor {
 /**
  * Quick helper to get system health
  */
-export function getSystemHealth(): SystemHealth {
-  return AgentHealthMonitor.getSystemHealth();
+export async function getSystemHealth(): Promise<SystemHealth> {
+  return await AgentHealthMonitor.getSystemHealth();
 }
 
 /**
  * Quick helper to get stuck agents
  */
-export function getStuckAgents(): Agent[] {
-  return AgentHealthMonitor.getStuckAgents();
+export async function getStuckAgents(): Promise<Agent[]> {
+  return await AgentHealthMonitor.getStuckAgents();
 }
 
 /**
  * Quick helper to get offline agents
  */
-export function getOfflineAgents(): Agent[] {
-  return AgentHealthMonitor.getOfflineAgents();
+export async function getOfflineAgents(): Promise<Agent[]> {
+  return await AgentHealthMonitor.getOfflineAgents();
 }
 
 /**
  * Quick helper to get idle agents
  */
-export function getIdleAgents(): Agent[] {
-  return AgentHealthMonitor.getIdleAgents();
+export async function getIdleAgents(): Promise<Agent[]> {
+  return await AgentHealthMonitor.getIdleAgents();
 }
 
 /**
  * Quick helper to run full health check
  */
-export function runHealthCheck() {
-  return AgentHealthMonitor.runHealthCheck();
+export async function runHealthCheck() {
+  return await AgentHealthMonitor.runHealthCheck();
 }

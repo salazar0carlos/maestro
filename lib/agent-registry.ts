@@ -5,23 +5,19 @@
  */
 
 import { Agent, AgentWorkload } from './types';
-import { getTasks, getAgents, updateAgent as updateAgentStorage, createAgent as createAgentStorage } from './storage';
-
-const STORAGE_KEY = 'maestro:agent_registry';
+import { getTasks, getAgents, updateAgent as updateAgentStorage, createAgent as createAgentStorage, getAgentRegistry, saveAgentRegistry } from './storage-adapter';
 
 /**
  * Get all agents from registry with extended fields
  */
-export function getAllAgents(): Agent[] {
-  if (typeof window === 'undefined') return [];
-
+export async function getAllAgents(): Promise<Agent[]> {
   // Get agents from main storage
-  const agents = getAgents();
+  const agents = await getAgents();
 
   // Merge with extended registry data
-  const registry = getExtendedRegistry();
+  const registry = await getExtendedRegistry();
 
-  return agents.map(agent => ({
+  return agents.map((agent: Agent) => ({
     ...agent,
     ...registry[agent.agent_id],
   }));
@@ -30,12 +26,9 @@ export function getAllAgents(): Agent[] {
 /**
  * Get extended registry data (capabilities, health scores, etc.)
  */
-function getExtendedRegistry(): Record<string, Partial<Agent>> {
-  if (typeof window === 'undefined') return {};
-
+async function getExtendedRegistry(): Promise<Record<string, Partial<Agent>>> {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : {};
+    return await getAgentRegistry();
   } catch {
     return {};
   }
@@ -44,11 +37,9 @@ function getExtendedRegistry(): Record<string, Partial<Agent>> {
 /**
  * Save extended registry data
  */
-function saveExtendedRegistry(registry: Record<string, Partial<Agent>>): void {
-  if (typeof window === 'undefined') return;
-
+async function saveExtendedRegistry(registry: Record<string, Partial<Agent>>): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(registry));
+    await saveAgentRegistry(registry);
   } catch (error) {
     console.error('Failed to save agent registry:', error);
   }
@@ -57,7 +48,7 @@ function saveExtendedRegistry(registry: Record<string, Partial<Agent>>): void {
 /**
  * Register a new agent with full capabilities
  */
-export function registerAgent(agent: Agent): Agent {
+export async function registerAgent(agent: Agent): Promise<Agent> {
   // Validate required fields
   if (!agent.agent_id || !agent.agent_name || !agent.project_id) {
     throw new Error('Missing required agent fields: agent_id, agent_name, project_id');
@@ -83,10 +74,10 @@ export function registerAgent(agent: Agent): Agent {
   };
 
   // Save to main storage
-  createAgentStorage(fullAgent);
+  await createAgentStorage(fullAgent);
 
   // Save extended data
-  const registry = getExtendedRegistry();
+  const registry = await getExtendedRegistry();
   registry[fullAgent.agent_id] = {
     agent_type: fullAgent.agent_type,
     capabilities: fullAgent.capabilities,
@@ -97,7 +88,7 @@ export function registerAgent(agent: Agent): Agent {
     health_score: fullAgent.health_score,
     current_task_id: fullAgent.current_task_id,
   };
-  saveExtendedRegistry(registry);
+  await saveExtendedRegistry(registry);
 
   return fullAgent;
 }
@@ -105,13 +96,13 @@ export function registerAgent(agent: Agent): Agent {
 /**
  * Get agents by type (Frontend, Backend, Testing, etc.)
  */
-export function getAgentsByType(type: string): Agent[] {
-  const agents = getAllAgents();
+export async function getAgentsByType(type: string): Promise<Agent[]> {
+  const agents = await getAllAgents();
 
   // Filter by type and exclude offline agents (no poll in last 10 minutes)
   const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
 
-  return agents.filter(agent => {
+  return agents.filter((agent: Agent) => {
     if (agent.agent_type !== type) return false;
 
     // Check if offline
@@ -127,12 +118,13 @@ export function getAgentsByType(type: string): Agent[] {
 /**
  * Update agent status and metadata
  */
-export function updateAgentStatus(agentId: string, status: 'active' | 'idle' | 'offline'): Agent | null {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+export async function updateAgentStatus(agentId: string, status: 'active' | 'idle' | 'offline'): Promise<Agent | null> {
+  const agents = await getAllAgents();
+  const agent = agents.find((a: Agent) => a.agent_id === agentId);
   if (!agent) return null;
 
   // Update main storage
-  const updated = updateAgentStorage(agentId, {
+  const updated = await updateAgentStorage(agentId, {
     status,
     last_poll_date: new Date().toISOString(),
   });
@@ -140,19 +132,21 @@ export function updateAgentStatus(agentId: string, status: 'active' | 'idle' | '
   if (!updated) return null;
 
   // Return full agent with extended data
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+  const allAgents = await getAllAgents();
+  return allAgents.find((a: Agent) => a.agent_id === agentId) || null;
 }
 
 /**
  * Get agent workload (tasks assigned to this agent)
  */
-export function getAgentWorkload(agentId: string): AgentWorkload {
-  const tasks = getTasks().filter(t => t.assigned_to_agent === agentId);
+export async function getAgentWorkload(agentId: string): Promise<AgentWorkload> {
+  const tasks = await getTasks();
+  const agentTasks = tasks.filter((t: any) => t.assigned_to_agent === agentId);
 
   return {
-    total: tasks.length,
-    in_progress: tasks.filter(t => t.status === 'in-progress').length,
-    todo: tasks.filter(t => t.status === 'todo').length,
+    total: agentTasks.length,
+    in_progress: agentTasks.filter((t: any) => t.status === 'in-progress').length,
+    todo: agentTasks.filter((t: any) => t.status === 'todo').length,
   };
 }
 
@@ -202,19 +196,20 @@ export function calculateHealthScore(agent: Agent): number {
 /**
  * Update agent health score
  */
-export function updateAgentHealthScore(agentId: string): number {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+export async function updateAgentHealthScore(agentId: string): Promise<number> {
+  const agents = await getAllAgents();
+  const agent = agents.find((a: Agent) => a.agent_id === agentId);
   if (!agent) return 0;
 
   const healthScore = calculateHealthScore(agent);
 
   // Update in extended registry
-  const registry = getExtendedRegistry();
+  const registry = await getExtendedRegistry();
   if (!registry[agentId]) {
     registry[agentId] = {};
   }
   registry[agentId].health_score = healthScore;
-  saveExtendedRegistry(registry);
+  await saveExtendedRegistry(registry);
 
   return healthScore;
 }
@@ -222,12 +217,13 @@ export function updateAgentHealthScore(agentId: string): number {
 /**
  * Update agent performance metrics after task completion
  */
-export function updateAgentPerformance(
+export async function updateAgentPerformance(
   agentId: string,
   taskSuccess: boolean,
   taskDuration: number
-): Agent | null {
-  const agent = getAllAgents().find(a => a.agent_id === agentId);
+): Promise<Agent | null> {
+  const agents = await getAllAgents();
+  const agent = agents.find((a: Agent) => a.agent_id === agentId);
   if (!agent) return null;
 
   const tasksCompleted = agent.tasks_completed || 0;
@@ -245,13 +241,13 @@ export function updateAgentPerformance(
   const newAvgTime = Math.round(currentAvg * (1 - alpha) + taskDuration * alpha);
 
   // Update storage
-  updateAgentStorage(agentId, {
+  await updateAgentStorage(agentId, {
     tasks_completed: taskSuccess ? tasksCompleted + 1 : tasksCompleted,
     tasks_failed: taskSuccess ? tasksFailed : tasksFailed + 1,
   });
 
   // Update extended registry
-  const registry = getExtendedRegistry();
+  const registry = await getExtendedRegistry();
   if (!registry[agentId]) {
     registry[agentId] = {};
   }
@@ -260,40 +256,42 @@ export function updateAgentPerformance(
   registry[agentId].average_task_time = newAvgTime;
   registry[agentId].tasks_failed = taskSuccess ? tasksFailed : tasksFailed + 1;
 
-  saveExtendedRegistry(registry);
+  await saveExtendedRegistry(registry);
 
   // Update health score
-  updateAgentHealthScore(agentId);
+  await updateAgentHealthScore(agentId);
 
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+  const allAgents = await getAllAgents();
+  return allAgents.find((a: Agent) => a.agent_id === agentId) || null;
 }
 
 /**
  * Get agent by ID with extended data
  */
-export function getAgentById(agentId: string): Agent | null {
-  return getAllAgents().find(a => a.agent_id === agentId) || null;
+export async function getAgentById(agentId: string): Promise<Agent | null> {
+  const agents = await getAllAgents();
+  return agents.find((a: Agent) => a.agent_id === agentId) || null;
 }
 
 /**
  * Update agent's current task
  */
-export function setAgentCurrentTask(agentId: string, taskId: string | undefined): Agent | null {
-  const registry = getExtendedRegistry();
+export async function setAgentCurrentTask(agentId: string, taskId: string | undefined): Promise<Agent | null> {
+  const registry = await getExtendedRegistry();
 
   if (!registry[agentId]) {
     registry[agentId] = {};
   }
 
   registry[agentId].current_task_id = taskId;
-  saveExtendedRegistry(registry);
+  await saveExtendedRegistry(registry);
 
   // Update status
   if (taskId) {
-    updateAgentStorage(agentId, { status: 'active' });
+    await updateAgentStorage(agentId, { status: 'active' });
   } else {
-    updateAgentStorage(agentId, { status: 'idle' });
+    await updateAgentStorage(agentId, { status: 'idle' });
   }
 
-  return getAgentById(agentId);
+  return await getAgentById(agentId);
 }
