@@ -187,7 +187,7 @@ export class ResearchIntegrationService {
    * Check if pattern should trigger research
    */
   shouldTriggerResearch(
-    patternName: string,
+    _patternName: string,
     confidence: number,
     matchCount: number
   ): boolean {
@@ -210,7 +210,7 @@ export class ResearchIntegrationService {
   /**
    * Generate research topic from pattern
    */
-  generateResearchTopic(patternName: string, codeContext: string): string {
+  generateResearchTopic(patternName: string, _codeContext: string): string {
     // Extract key terms from pattern name
     const terms = patternName
       .split(/[-_\s]+/)

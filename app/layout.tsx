@@ -27,6 +27,9 @@ export default function RootLayout({
                 <Link href="/" className="text-sm text-slate-300 hover:text-blue-400 transition">
                   Projects
                 </Link>
+                <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                  Improvements
+                </Link>
                 <Link href="/monitor" className="text-sm text-slate-300 hover:text-blue-400 transition">
                   Monitor
                 </Link>

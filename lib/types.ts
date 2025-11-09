@@ -168,9 +168,9 @@ export interface Analysis {
 }
 
 /**
- * Improvement suggestion from an analysis
+ * Analysis suggestion from continuous analysis
  */
-export interface ImprovementSuggestion {
+export interface AnalysisSuggestion {
   suggestion_id: string;
   analysis_id: string;
   title: string;
@@ -239,6 +239,9 @@ export interface AnalysisSchedule {
   next_run_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+/**
  * Improvement suggestion from agents or automated analysis
  */
 export interface ImprovementSuggestion {

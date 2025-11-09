@@ -254,9 +254,9 @@ export function exportIntelligenceLayer(
  * Generate intelligence layer report
  */
 export function generateIntelligenceReport(
-  project: Project,
+  _project: Project,
   improvements: ImprovementSuggestion[],
-  tasks: MaestroTask[]
+  _tasks: MaestroTask[]
 ): {
   summary: {
     totalImprovements: number;
