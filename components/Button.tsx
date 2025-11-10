@@ -7,7 +7,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   as?: 'button' | 'span';
 }
 
-export function Button({
+export const Button = React.memo(function Button({
   variant = 'primary',
   size = 'md',
   isLoading = false,
@@ -45,4 +45,4 @@ export function Button({
       {children}
     </Component>
   );
-}
+});
