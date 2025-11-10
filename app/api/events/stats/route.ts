@@ -18,6 +18,8 @@ import {
 import { EventBus } from '@/lib/event-system';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/events/stats
  */

@@ -8,6 +8,8 @@ import { getAgents, getTasks, getProjects } from '@/lib/storage-adapter';
 import { getAgentStatistics, checkAgentHealth } from '@/lib/agent-stats';
 import { Agent, MaestroTask, Project } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export interface AgentMonitorData {
   agent_id: string;
   agent_name: string;

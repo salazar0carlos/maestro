@@ -30,6 +30,8 @@ import { validateTaskUpdate } from '@/lib/validation';
 import { trackTaskStart, trackTaskCompletion } from '@/lib/agent-stats';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 async function handler(
   request: NextRequest,
   { params }: { params: { id: string } }

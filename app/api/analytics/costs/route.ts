@@ -25,6 +25,8 @@ import { CostTracker } from '@/lib/cost-tracking';
 import { PerformanceMonitor } from '@/lib/performance';
 import { validate } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST body validation schema
  */

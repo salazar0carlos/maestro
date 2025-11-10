@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enqueueTask } from '@/lib/queue';
 import type { MaestroTask } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/tasks/enqueue
  *

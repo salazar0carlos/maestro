@@ -13,6 +13,8 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { promises as fs } from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 interface HealthCheck {
   name: string;
   status: 'pass' | 'fail' | 'warn';
