@@ -1,28 +1,50 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Github, AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    // Check for OAuth errors in URL
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      switch (errorParam) {
+        case 'auth_failed':
+          setError('GitHub authentication failed. Please try again.');
+          break;
+        case 'no_code':
+          setError('No authorization code received. Please try again.');
+          break;
+        case 'unexpected_error':
+          setError('An unexpected error occurred. Please try again.');
+          break;
+        default:
+          setError('Authentication error. Please try again.');
+      }
+      // Remove error from URL
+      router.replace('/login');
+    }
+  }, [searchParams, router]);
+
+  const handleGitHubLogin = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
 
       if (error) {
@@ -31,11 +53,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.user) {
-        // Successful login - redirect to projects
-        router.push('/projects');
-        router.refresh();
-      }
+      // OAuth will redirect, so we don't need to manually navigate
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during login');
       setIsLoading(false);
@@ -48,65 +66,56 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="text-3xl font-bold text-blue-400 mb-2">⚡ Maestro</div>
           <h1 className="text-2xl font-bold text-slate-50 mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Sign in to your account</p>
+          <p className="text-slate-400">Sign in with your GitHub account</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-500 text-red-400 text-sm">
-            {error}
+          <div className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-500 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
+        <div className="space-y-4">
           <Button
-            type="submit"
+            onClick={handleGitHubLogin}
             variant="primary"
             disabled={isLoading}
-            className="w-full"
+            className="w-full flex items-center justify-center gap-3"
           >
-            {isLoading ? 'Signing in...' : 'Sign In'}
+            <Github className="w-5 h-5" />
+            {isLoading ? 'Connecting to GitHub...' : 'Sign in with GitHub'}
           </Button>
-        </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-slate-400">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-blue-400 hover:text-blue-300">
-              Sign up
-            </Link>
-          </p>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-slate-800 text-slate-400">
+                Secure authentication via GitHub
+              </span>
+            </div>
+          </div>
+
+          <div className="text-center text-xs text-slate-500 space-y-1">
+            <p>By signing in, you agree to our Terms of Service</p>
+            <p>We only access your public GitHub profile</p>
+          </div>
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-slate-400">Loading...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
