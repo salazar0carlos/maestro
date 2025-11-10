@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LogoutButton } from "@/components/LogoutButton";
+import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-slate-950 text-slate-50 antialiased">
+        <ToastProvider />
         <div className="flex h-screen flex-col">
           {/* Header */}
           <header className="border-b border-slate-800 bg-slate-900 px-6 py-4">

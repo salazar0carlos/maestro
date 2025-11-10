@@ -18,6 +18,7 @@ import {
   getAgentTasks,
   getTasksByStatus,
 } from '@/lib/storage-adapter';
+import { requireAuth } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    await requireAuth();
+
     const { searchParams } = new URL(request.url);
     const agent = searchParams.get('agent');
     const status = searchParams.get('status');

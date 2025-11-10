@@ -23,6 +23,7 @@ import {
 import { validateAgent } from '@/lib/validation';
 import { getAgentStatistics, getProjectAgentStatistics } from '@/lib/agent-stats';
 import { PerformanceMonitor } from '@/lib/performance';
+import { requireAuth } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   PerformanceMonitor.start('list_agents');
 
   try {
+    await requireAuth();
+
     const projectId = getQueryParam(request, 'project_id');
     const status = getQueryParam(request, 'status');
     const withStats = getQueryParam(request, 'with_stats') === 'true';
@@ -95,6 +98,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   PerformanceMonitor.start('create_agent');
 
   try {
+    await requireAuth();
+
     // Parse request body
     const body = await parseJsonBody<Partial<Agent>>(request);
 

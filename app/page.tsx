@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
-import { createProject, seedData } from '@/lib/storage-adapter';
+import { createProject } from '@/lib/storage-adapter';
 import { Project } from '@/lib/types';
 import {
   LineChart,
@@ -99,11 +99,7 @@ export default function Dashboard() {
   const [projectDescription, setProjectDescription] = useState('');
 
   useEffect(() => {
-    const loadDashboard = async () => {
-      await seedData();
-      await fetchDashboard();
-    };
-    loadDashboard();
+    fetchDashboard();
   }, []);
 
   const fetchDashboard = async () => {

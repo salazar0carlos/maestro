@@ -6,6 +6,7 @@ import {
   getImprovements,
 } from '@/lib/storage-adapter';
 import { Project, MaestroTask, Agent } from '@/lib/types';
+import { requireAuth } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -219,6 +220,8 @@ function getWeeklyTaskStats(tasks: MaestroTask[]) {
 
 export async function GET(_request: NextRequest) {
   try {
+    await requireAuth();
+
     // Fetch all data
     const [projects, tasks, agents, improvements] = await Promise.all([
       getProjects(),
