@@ -1,18 +1,27 @@
 /**
  * Supabase Client Configuration
  *
- * Provides database access for Maestro
+ * Provides database access and authentication for Maestro
  * Replaces localStorage with shared PostgreSQL database
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 // Create client with placeholder values if env vars not set
 // This allows the app to build without configured Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+
+// Create browser client for client-side authentication
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // Helper to check if Supabase is configured
 export const isSupabaseConfigured = () => {
@@ -23,6 +32,23 @@ export const isSupabaseConfigured = () => {
   );
 };
 
+// Authentication helpers
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  if (error) {
+    console.error('[supabase] Error getting current user:', error);
+    return null;
+  }
+
+  return user;
+}
+
+export async function getUserId(): Promise<string | null> {
+  const user = await getCurrentUser();
+  return user?.id || null;
+}
+
 // Server-side client with service role (for agents)
 export function createServiceClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -31,7 +57,7 @@ export function createServiceClient() {
     console.warn('[Supabase] Service role key not found. Some operations may fail.');
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

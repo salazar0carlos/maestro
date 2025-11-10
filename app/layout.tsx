@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LogoutButton } from "@/components/LogoutButton";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export default function RootLayout({
                 <span className="text-sm text-slate-400">AI Agent Command Center</span>
               </Link>
               <nav className="flex items-center gap-4">
-                <Link href="/" className="text-sm text-slate-300 hover:text-blue-400 transition">
+                <Link href="/projects" className="text-sm text-slate-300 hover:text-blue-400 transition">
                   Projects
                 </Link>
                 <Link href="/improvements" className="text-sm text-slate-300 hover:text-blue-400 transition">
@@ -42,6 +43,8 @@ export default function RootLayout({
                 <Link href="/settings" className="text-sm text-slate-300 hover:text-blue-400 transition">
                   Settings
                 </Link>
+                <div className="border-l border-slate-700 h-4 mx-2"></div>
+                <LogoutButton />
               </nav>
             </div>
           </header>
