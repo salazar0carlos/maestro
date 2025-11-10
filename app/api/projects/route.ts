@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getProjects } from '@/lib/storage-adapter';
 import { requireAuth } from '@/lib/auth-helpers';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/projects
  * Fetches all projects for the authenticated user

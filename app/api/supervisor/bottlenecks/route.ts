@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server';
 import { BottleneckDetector } from '@/lib/bottleneck-detection';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const bottlenecks = BottleneckDetector.detectBottlenecks();

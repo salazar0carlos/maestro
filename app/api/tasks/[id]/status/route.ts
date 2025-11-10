@@ -15,6 +15,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateTask, getTask } from '@/lib/storage-adapter';
 import { TaskStatus } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -9,6 +9,8 @@ import { withErrorHandling } from '@/lib/api-utils';
 import { CostTracker } from '@/lib/cost-tracking';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/analytics/costs/export
  * Export costs as CSV

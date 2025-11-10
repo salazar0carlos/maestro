@@ -21,6 +21,8 @@ import {
 import { trackTaskCompletion } from '@/lib/agent-stats';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 async function handler(
   _request: NextRequest,
   { params }: { params: { id: string } }

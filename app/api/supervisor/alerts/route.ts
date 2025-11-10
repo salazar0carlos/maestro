@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server';
 import { AlertSystem } from '@/lib/alerts';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const alerts = AlertSystem.generateAlerts();

@@ -24,6 +24,8 @@ import { validateAgent } from '@/lib/validation';
 import { getAgentStatistics, getProjectAgentStatistics } from '@/lib/agent-stats';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Generate a simple unique ID
  */
