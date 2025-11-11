@@ -40,10 +40,15 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
+      // Use production URL from environment variable, fallback to current origin for local dev
+      const redirectUrl = process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
+        : `${window.location.origin}/auth/callback`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
         },
       });
 
@@ -65,8 +70,9 @@ function LoginForm() {
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
           <div className="text-3xl font-bold text-blue-400 mb-2">⚡ Maestro</div>
-          <h1 className="text-2xl font-bold text-slate-50 mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Sign in with your GitHub account</p>
+          <h1 className="text-2xl font-bold text-slate-50 mb-2">Welcome to Maestro</h1>
+          <p className="text-slate-400 mb-2">Sign in with GitHub to get started</p>
+          <p className="text-xs text-slate-500">Maestro builds apps from GitHub repositories, so a GitHub account is required</p>
         </div>
 
         {error && (
@@ -99,8 +105,8 @@ function LoginForm() {
           </div>
 
           <div className="text-center text-xs text-slate-500 space-y-1">
-            <p>By signing in, you agree to our Terms of Service</p>
-            <p>We only access your public GitHub profile</p>
+            <p>Maestro needs GitHub access to manage your repositories</p>
+            <p>Agents will clone repos, create branches, and submit pull requests</p>
           </div>
         </div>
       </Card>
