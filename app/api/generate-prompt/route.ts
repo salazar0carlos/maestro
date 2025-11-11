@@ -5,20 +5,7 @@ export async function POST(req: NextRequest) {
     const { taskTitle, taskDescription } = await req.json();
     const apiKey = req.headers.get('x-anthropic-key');
 
-    // Debug logging
-    console.log('[generate-prompt API] Request received');
-    console.log('[generate-prompt API] Task Title:', taskTitle);
-    console.log('[generate-prompt API] API Key present:', !!apiKey);
-    if (apiKey) {
-      console.log('[generate-prompt API] API Key length:', apiKey.length);
-      console.log('[generate-prompt API] API Key starts with sk-ant-:', apiKey.startsWith('sk-ant-'));
-      console.log('[generate-prompt API] API Key first 10 chars:', apiKey.substring(0, 10));
-      console.log('[generate-prompt API] API Key has leading/trailing spaces:', apiKey !== apiKey.trim());
-      console.log('[generate-prompt API] API Key (trimmed) first 10 chars:', apiKey.trim().substring(0, 10));
-    }
-
     if (!apiKey) {
-      console.error('[generate-prompt API] ERROR: API key not provided');
       return NextResponse.json(
         { error: 'API key not provided' },
         { status: 400 }
@@ -26,7 +13,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!taskTitle) {
-      console.error('[generate-prompt API] ERROR: Task title not provided');
       return NextResponse.json(
         { error: 'Task title is required' },
         { status: 400 }
@@ -45,10 +31,8 @@ Create a comprehensive prompt that will guide an AI agent to successfully implem
 - Success criteria
 - Edge cases to consider`;
 
-    // Trim the API key to ensure no leading/trailing whitespace issues
     const trimmedApiKey = apiKey.trim();
 
-    console.log('[generate-prompt API] Calling Anthropic API with trimmed key...');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -68,14 +52,11 @@ Create a comprehensive prompt that will guide an AI agent to successfully implem
       }),
     });
 
-    console.log('[generate-prompt API] Response status:', response.status);
-
     if (!response.ok) {
       let errorMessage = 'API request failed';
       let rawError = '';
       try {
         const errorData = await response.json() as Record<string, unknown>;
-        console.log('[generate-prompt API] Error data:', JSON.stringify(errorData));
         rawError = JSON.stringify(errorData);
         if (errorData.error) {
           if (typeof errorData.error === 'string') {
@@ -86,9 +67,8 @@ Create a comprehensive prompt that will guide an AI agent to successfully implem
           }
         }
       } catch (e) {
-        console.error('[generate-prompt API] Failed to parse error response:', e);
+        // Failed to parse error response
       }
-      console.error('[generate-prompt API] API Error:', errorMessage);
 
       // Provide helpful error messages based on the error type
       let userFriendlyError = `Anthropic API Error: ${errorMessage}`;

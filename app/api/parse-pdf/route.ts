@@ -13,16 +13,10 @@ interface ParsedProject {
 
 export async function POST(req: NextRequest) {
   try {
-    const { pdfBase64, fileName } = await req.json();
+    const { pdfBase64 } = await req.json();
     const apiKey = req.headers.get('x-anthropic-key');
 
-    console.log('[parse-pdf API] Request received');
-    console.log('[parse-pdf API] File name:', fileName);
-    console.log('[parse-pdf API] PDF Base64 length:', pdfBase64?.length || 0);
-    console.log('[parse-pdf API] API Key present:', !!apiKey);
-
     if (!pdfBase64) {
-      console.error('[parse-pdf API] ERROR: PDF base64 not provided');
       return NextResponse.json(
         { error: 'PDF file is required' },
         { status: 400 }
@@ -30,7 +24,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!apiKey) {
-      console.error('[parse-pdf API] ERROR: API key not provided');
       return NextResponse.json(
         { error: 'API key not provided' },
         { status: 400 }
@@ -82,7 +75,6 @@ If the document is not a project plan, return an appropriate error message.`;
 
     const trimmedApiKey = apiKey.trim();
 
-    console.log('[parse-pdf API] Calling Anthropic API with native PDF support...');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -115,13 +107,10 @@ If the document is not a project plan, return an appropriate error message.`;
       }),
     });
 
-    console.log('[parse-pdf API] Response status:', response.status);
-
     if (!response.ok) {
       let errorMessage = 'API request failed';
       try {
         const errorData = (await response.json()) as Record<string, unknown>;
-        console.log('[parse-pdf API] Error data:', JSON.stringify(errorData));
         if (errorData.error) {
           if (typeof errorData.error === 'string') {
             errorMessage = errorData.error;
@@ -131,9 +120,8 @@ If the document is not a project plan, return an appropriate error message.`;
           }
         }
       } catch (e) {
-        console.error('[parse-pdf API] Failed to parse error response:', e);
+        // Failed to parse error response
       }
-      console.error('[parse-pdf API] API Error:', errorMessage);
 
       let userFriendlyError = `Anthropic API Error: ${errorMessage}`;
       if (
@@ -165,7 +153,6 @@ If the document is not a project plan, return an appropriate error message.`;
     }
 
     const responseText = content.text as string;
-    console.log('[parse-pdf API] API response received, length:', responseText.length);
 
     // Parse JSON from response - handle markdown code blocks
     let jsonStr = responseText;
@@ -183,14 +170,11 @@ If the document is not a project plan, return an appropriate error message.`;
       );
     }
 
-    console.log('[parse-pdf API] Successfully parsed', parsedData.projects.length, 'projects');
-
     return NextResponse.json({
       projects: parsedData.projects,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[parse-pdf API] Exception:', errorMessage);
     return NextResponse.json(
       { error: `Failed to parse PDF: ${errorMessage}` },
       { status: 500 }

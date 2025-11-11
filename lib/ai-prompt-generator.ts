@@ -16,9 +16,6 @@ import Anthropic from '@anthropic-ai/sdk';
  * - CONSTRAINTS: Architecture rules, patterns to follow, tech stack limitations
  */
 
-// Reserved for future direct API usage
-// let client: Anthropic | null = null;
-
 /**
  * Generate a detailed task prompt from a title and optional description
  *
@@ -35,22 +32,11 @@ export async function generateTaskPrompt(
     ? localStorage.getItem('anthropic_api_key')
     : process.env.ANTHROPIC_API_KEY;
 
-  // Debug logging
-  console.log('[generateTaskPrompt] Client function called');
-  console.log('[generateTaskPrompt] Title:', title);
-  console.log('[generateTaskPrompt] API Key present:', !!apiKey);
-  if (apiKey) {
-    console.log('[generateTaskPrompt] API Key length:', apiKey.length);
-    console.log('[generateTaskPrompt] API Key starts with sk-ant-:', apiKey.startsWith('sk-ant-'));
-    console.log('[generateTaskPrompt] API Key first 10 chars:', apiKey.substring(0, 10));
-  }
-
   if (!apiKey) {
     throw new Error('API key not configured. Please set your API key in Settings.');
   }
 
   try {
-    console.log('[generateTaskPrompt] Sending request to /api/generate-prompt...');
     const response = await fetch('/api/generate-prompt', {
       method: 'POST',
       headers: {
@@ -63,11 +49,8 @@ export async function generateTaskPrompt(
       }),
     });
 
-    console.log('[generateTaskPrompt] Response status:', response.status);
-
     if (!response.ok) {
       const errorData = await response.json() as Record<string, unknown>;
-      console.log('[generateTaskPrompt] Error response:', errorData);
       const errorMessage = (errorData.error as string) || 'API request failed';
       throw new Error(errorMessage);
     }
@@ -79,14 +62,11 @@ export async function generateTaskPrompt(
       throw new Error('No prompt generated');
     }
 
-    console.log('[generateTaskPrompt] Prompt generated successfully');
     return prompt;
   } catch (error) {
     if (error instanceof Error) {
-      console.error('[generateTaskPrompt] Error:', error.message);
       throw new Error(`Failed to generate prompt: ${error.message}`);
     }
-    console.error('[generateTaskPrompt] Unknown error:', error);
     throw new Error('Failed to generate prompt: Unknown error');
   }
 }
