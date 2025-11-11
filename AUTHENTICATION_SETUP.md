@@ -33,9 +33,10 @@ Maestro uses GitHub OAuth for authentication because:
 2. Click **New OAuth App** (or **New GitHub App** for organizations)
 3. Fill in the application details:
    - **Application name**: Maestro (or your preferred name)
-   - **Homepage URL**: Your app URL (e.g., `http://localhost:3000` for development)
+   - **Homepage URL**: Your production app URL (e.g., `https://maestro-dusky.vercel.app`)
    - **Authorization callback URL**: Copy this from Supabase (shown on the GitHub provider page)
      - Format: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+     - **IMPORTANT**: This must be your Supabase callback URL, NOT your app's URL
 4. Click **Register application**
 5. Copy the **Client ID**
 6. Click **Generate a new client secret** and copy it
@@ -52,10 +53,9 @@ Maestro uses GitHub OAuth for authentication because:
 1. Still in **Authentication** settings
 2. Navigate to **URL Configuration**
 3. Add your site URLs:
-   - **Site URL**: `http://localhost:3000` (development) or your production URL
-   - **Redirect URLs**: Add these URLs:
-     - `http://localhost:3000/projects`
-     - `https://your-production-domain.com/projects` (when deployed)
+   - **Site URL**: `https://maestro-dusky.vercel.app` (your production URL)
+   - **Redirect URLs**: Add this URL:
+     - `https://maestro-dusky.vercel.app/projects`
 
 ### Step 3: Run Database Migrations
 
@@ -122,15 +122,10 @@ You should see policies for:
 
 ### Step 6: Test GitHub Authentication Flow
 
-1. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-2. Visit http://localhost:3000
+1. Visit your production app: https://maestro-dusky.vercel.app
    - Should automatically redirect to `/login`
 
-3. Click "Sign in with GitHub"
+2. Click "Sign in with GitHub"
    - Redirects to GitHub OAuth authorization page
    - Review the permissions Maestro is requesting
    - Click "Authorize" to grant access
@@ -141,14 +136,14 @@ You should see policies for:
    - Fill in name and description
    - Project should appear in the list immediately
 
-5. Test data isolation:
+4. Test data isolation:
    - Open an incognito/private browser window
-   - Sign in with a different GitHub account
+   - Visit https://maestro-dusky.vercel.app and sign in with a different GitHub account
    - Verify you cannot see the first user's projects
    - Create a project as the second user
    - Verify the second user only sees their own project
 
-6. Test logout:
+5. Test logout:
    - Click "Logout" in the navigation
    - Should redirect to `/login`
    - Verify you cannot access `/projects` without logging in
@@ -304,28 +299,26 @@ export async function GET() {
 
 ## Production Deployment
 
-Before deploying to production:
+Your app is deployed to: **https://maestro-dusky.vercel.app**
 
-1. **Update GitHub OAuth App**:
-   - Add production callback URL: `https://your-domain.com`
-   - Update authorization callback URL
+Required environment variables in Vercel:
 
-2. **Update Supabase**:
-   - Add production URL to redirect URLs
-   - Update site URL to production domain
+1. **Supabase Configuration**:
+   - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
 
-3. **Environment Variables**:
-   - Set `NEXT_PUBLIC_SUPABASE_URL` in production
-   - Set `NEXT_PUBLIC_SUPABASE_ANON_KEY` in production
+2. **App Configuration**:
+   - `NEXT_PUBLIC_APP_URL` - Set to `https://maestro-dusky.vercel.app`
 
-4. **Test Authentication**:
+3. **Verify Deployment**:
    - Test GitHub login flow on production
-   - Verify redirects work correctly
-   - Test data isolation
+   - Verify redirects work correctly (should stay on maestro-dusky.vercel.app, not redirect to localhost)
+   - Test data isolation with multiple GitHub accounts
 
-5. **GitHub Permissions**:
-   - Review requested OAuth scopes
-   - Ensure only necessary permissions are requested
+4. **GitHub OAuth Scopes**:
+   - Read user profile
+   - Access repositories (for agent operations)
+   - Create pull requests
 
 ## Security Best Practices
 

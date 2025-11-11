@@ -235,7 +235,11 @@ export class AnalysisScheduler {
     } else {
       // Server environment - would need to fetch from Supabase or API
       try {
-        const response = await fetch('http://localhost:3000/api/projects');
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+        if (!baseUrl) {
+          throw new Error('NEXT_PUBLIC_APP_URL environment variable is required');
+        }
+        const response = await fetch(`${baseUrl}/api/projects`);
         if (!response.ok) {
           throw new Error(`Failed to fetch projects: ${response.statusText}`);
         }

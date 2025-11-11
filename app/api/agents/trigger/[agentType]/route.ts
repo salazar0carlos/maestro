@@ -58,7 +58,7 @@ export async function POST(
       body: JSON.stringify({
         taskId,
         task,
-        maestroUrl: process.env.MAESTRO_URL || 'http://localhost:3000',
+        maestroUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.MAESTRO_URL,
       }),
     }).catch(error => {
       console.error(`[Agent Trigger] Webhook call failed: ${error.message}`);

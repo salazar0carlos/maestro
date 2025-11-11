@@ -42,7 +42,10 @@ async function testEndpoint(
   body?: any
 ): Promise<{ ok: boolean; status: number; data?: any; error?: string }> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl) {
+      throw new Error('NEXT_PUBLIC_APP_URL environment variable is required');
+    }
     const url = `${baseUrl}${path}`;
 
     const options: RequestInit = {
