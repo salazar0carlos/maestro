@@ -20,6 +20,8 @@ import {
 import { getAgentStatistics, checkAgentHealth } from '@/lib/agent-stats';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/agents/[id]
  */

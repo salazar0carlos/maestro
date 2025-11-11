@@ -14,6 +14,8 @@ import {
 import { EventTypes, EventPayload } from '@/lib/event-system';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 const AGENT_NAME = 'research';
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

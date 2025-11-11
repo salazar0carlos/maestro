@@ -27,6 +27,9 @@ import {
 } from '@/lib/api-utils';
 import { validateImprovement } from '@/lib/validation';
 import { PerformanceMonitor } from '@/lib/performance';
+import { requireAuth } from '@/lib/auth-helpers';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * Generate a simple unique ID
@@ -43,6 +46,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   PerformanceMonitor.start('list_improvements');
 
   try {
+    await requireAuth();
+
     const projectId = getQueryParam(request, 'project_id');
     const status = getQueryParam(request, 'status');
     const suggestedBy = getQueryParam(request, 'suggested_by');
@@ -99,6 +104,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   PerformanceMonitor.start('create_improvement');
 
   try {
+    await requireAuth();
+
     // Parse request body
     const body = await parseJsonBody<Partial<ImprovementSuggestion>>(request);
 

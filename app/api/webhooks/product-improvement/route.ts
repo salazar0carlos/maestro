@@ -21,6 +21,8 @@ import {
 import { EventTypes, EventPayload } from '@/lib/event-system';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 const AGENT_NAME = 'product-improvement';
 
 /**

@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server';
 import { TaskRouter } from '@/lib/task-assignment';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST() {
   try {
     const results = await TaskRouter.reassignStuckTasks();

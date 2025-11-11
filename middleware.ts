@@ -62,6 +62,7 @@ export async function middleware(req: NextRequest) {
 
   // Public routes that don't require authentication
   const publicPaths = ['/login'];
+  const publicPaths = ['/login', '/auth/callback'];
   const isPublicPath = publicPaths.some((path) => req.nextUrl.pathname.startsWith(path));
 
   // If user is not logged in and trying to access a protected route
@@ -70,8 +71,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If user is logged in and trying to access auth pages, redirect to projects
-  if (session && isPublicPath) {
+  // If user is logged in and trying to access login page, redirect to projects
+  // (allow /auth/callback to process OAuth response)
+  if (session && req.nextUrl.pathname.startsWith('/login')) {
     const redirectUrl = new URL('/projects', req.url);
     return NextResponse.redirect(redirectUrl);
   }

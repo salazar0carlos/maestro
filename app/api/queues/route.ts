@@ -14,6 +14,8 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { queues } from '@/lib/queue';
 
+export const dynamic = 'force-dynamic';
+
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/api/queues');
 

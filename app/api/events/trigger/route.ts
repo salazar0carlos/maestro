@@ -22,6 +22,8 @@ import {
 import { EventBus, EventTypes } from '@/lib/event-system';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Valid event types (all from EventTypes constant)
  */

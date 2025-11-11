@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/projects/:id/assign-tasks
  * Automatically assign all unassigned tasks in a project to appropriate agents

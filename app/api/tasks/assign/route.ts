@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TaskRouter } from '@/lib/task-assignment';
 import { getTask } from '@/lib/storage-adapter';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

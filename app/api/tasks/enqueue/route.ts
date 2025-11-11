@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueTask } from '@/lib/queue';
 import type { MaestroTask } from '@/lib/types';
+import { requireAuth } from '@/lib/auth-helpers';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/tasks/enqueue
@@ -10,6 +13,8 @@ import type { MaestroTask } from '@/lib/types';
  */
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth();
+
     const body = await request.json();
     const { task, taskId, agentType } = body;
 

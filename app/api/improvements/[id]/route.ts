@@ -32,6 +32,8 @@ import {
 import { validateImprovementUpdate } from '@/lib/validation';
 import { PerformanceMonitor } from '@/lib/performance';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Generate a simple unique ID
  */
