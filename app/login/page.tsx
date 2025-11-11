@@ -15,10 +15,15 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Use production URL from environment variable, fallback to current origin for local dev
+      const redirectUrl = process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/projects`
+        : `${window.location.origin}/projects`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {
-          redirectTo: `${window.location.origin}/projects`,
+          redirectTo: redirectUrl,
         },
       });
 
