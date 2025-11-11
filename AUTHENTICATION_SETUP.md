@@ -1,36 +1,65 @@
 # Maestro Authentication Setup Guide
 
-This guide walks you through setting up Supabase authentication with Row Level Security (RLS) for the Maestro application.
+This guide walks you through setting up Supabase authentication with GitHub OAuth and Row Level Security (RLS) for the Maestro application.
 
 ## Overview
 
-Maestro now uses Supabase Authentication to ensure:
-- ✅ Users must log in to access the application
-- ✅ Each user only sees their own projects, tasks, agents, and improvements
-- ✅ Row Level Security (RLS) enforces data isolation at the database level
-- ✅ API routes are protected with authentication checks
+Maestro uses GitHub OAuth for authentication because:
+- ✅ **GitHub integration is essential** - Maestro needs GitHub access to manage repositories
+- ✅ **Single sign-on** - No separate password to manage
+- ✅ **Secure by default** - OAuth 2.0 protocol
+- ✅ **User data isolation** - Each user only sees their own projects, tasks, agents, and improvements
+- ✅ **Row Level Security (RLS)** - Database-level security enforces data isolation
 
 ## Prerequisites
 
 - Supabase project with database configured
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` environment variables set
+- GitHub account for OAuth setup
 
 ## Setup Steps
 
-### Step 1: Enable Supabase Authentication
+### Step 1: Enable GitHub OAuth in Supabase
 
 1. Go to your Supabase dashboard: https://app.supabase.com
 2. Select your project
 3. Navigate to **Authentication** > **Providers**
-4. Enable **Email** provider (enabled by default)
-5. Configure redirect URLs:
-   - Go to **Authentication** > **URL Configuration**
-   - Add your site URL (e.g., `http://localhost:3000` for development)
-   - Add redirect URLs: `http://localhost:3000/login`, `http://localhost:3000/projects`
+4. Find **GitHub** in the list of providers
+5. Toggle **Enable GitHub provider**
 
-### Step 2: Run Database Migrations
+#### Get GitHub OAuth Credentials
 
-#### 2a. Add user_id columns
+1. Go to GitHub: https://github.com/settings/developers
+2. Click **New OAuth App** (or **New GitHub App** for organizations)
+3. Fill in the application details:
+   - **Application name**: Maestro (or your preferred name)
+   - **Homepage URL**: Your app URL (e.g., `http://localhost:3000` for development)
+   - **Authorization callback URL**: Copy this from Supabase (shown on the GitHub provider page)
+     - Format: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+4. Click **Register application**
+5. Copy the **Client ID**
+6. Click **Generate a new client secret** and copy it
+
+#### Configure Supabase with GitHub Credentials
+
+1. Back in Supabase, on the GitHub provider page:
+   - Paste your **Client ID** from GitHub
+   - Paste your **Client Secret** from GitHub
+2. Click **Save**
+
+### Step 2: Configure Redirect URLs
+
+1. Still in **Authentication** settings
+2. Navigate to **URL Configuration**
+3. Add your site URLs:
+   - **Site URL**: `http://localhost:3000` (development) or your production URL
+   - **Redirect URLs**: Add these URLs:
+     - `http://localhost:3000/projects`
+     - `https://your-production-domain.com/projects` (when deployed)
+
+### Step 3: Run Database Migrations
+
+#### 3a. Add user_id columns
 
 1. Open Supabase SQL Editor: **SQL Editor** > **New Query**
 2. Copy and paste the contents of `supabase/add_user_id_migration.sql`
@@ -38,7 +67,7 @@ Maestro now uses Supabase Authentication to ensure:
 
 This migration adds `user_id` columns to all tables and creates indexes for efficient queries.
 
-#### 2b. Clean up existing data (if any)
+#### 3b. Clean up existing data (if any)
 
 If you have existing test data without user IDs, you have two options:
 
@@ -50,9 +79,10 @@ DELETE FROM agents WHERE user_id IS NULL;
 DELETE FROM improvements WHERE user_id IS NULL;
 ```
 
-**Option B: Assign to your user** (after creating an account)
+**Option B: Assign to your user** (after signing in with GitHub)
 ```sql
--- First, sign up through the app to get your user_id
+-- First, sign in through the app to get your user_id
+-- Check your user_id with: SELECT id, email FROM auth.users;
 -- Then run this query, replacing 'your-user-id' with your actual user ID
 UPDATE projects SET user_id = 'your-user-id' WHERE user_id IS NULL;
 UPDATE tasks SET user_id = 'your-user-id' WHERE user_id IS NULL;
@@ -60,7 +90,7 @@ UPDATE agents SET user_id = 'your-user-id' WHERE user_id IS NULL;
 UPDATE improvements SET user_id = 'your-user-id' WHERE user_id IS NULL;
 ```
 
-### Step 3: Enable Row Level Security (RLS)
+### Step 4: Enable Row Level Security (RLS)
 
 1. Open Supabase SQL Editor
 2. Copy and paste the contents of `supabase/rls_policies.sql`
@@ -71,7 +101,7 @@ This creates RLS policies that ensure:
 - Users can only create/update/delete their own data
 - All operations are filtered by the authenticated user's ID
 
-### Step 4: Verify RLS is Working
+### Step 5: Verify RLS is Working
 
 Run this query to see all active RLS policies:
 
@@ -90,7 +120,7 @@ You should see policies for:
 - cost_records (SELECT, INSERT)
 - events (SELECT, INSERT)
 
-### Step 5: Test Authentication Flow
+### Step 6: Test GitHub Authentication Flow
 
 1. Start the development server:
    ```bash
@@ -100,10 +130,11 @@ You should see policies for:
 2. Visit http://localhost:3000
    - Should automatically redirect to `/login`
 
-3. Click "Sign up" and create an account
-   - Use a valid email address
-   - Password must be at least 6 characters
-   - Should redirect to `/projects` after signup
+3. Click "Sign in with GitHub"
+   - Redirects to GitHub OAuth authorization page
+   - Review the permissions Maestro is requesting
+   - Click "Authorize" to grant access
+   - Should redirect back to `/projects` after successful authentication
 
 4. Create a project
    - Click "Create Project"
@@ -112,7 +143,7 @@ You should see policies for:
 
 5. Test data isolation:
    - Open an incognito/private browser window
-   - Sign up with a different email
+   - Sign in with a different GitHub account
    - Verify you cannot see the first user's projects
    - Create a project as the second user
    - Verify the second user only sees their own project
@@ -121,6 +152,7 @@ You should see policies for:
    - Click "Logout" in the navigation
    - Should redirect to `/login`
    - Verify you cannot access `/projects` without logging in
+   - Sign in again with GitHub to access your data
 
 ## Architecture
 
@@ -133,19 +165,44 @@ Middleware checks authentication
   ↓
 Not authenticated → Redirect to /login
   ↓
-Authenticated → Allow access
+User clicks "Sign in with GitHub"
+  ↓
+Redirect to GitHub OAuth
+  ↓
+User authorizes Maestro
+  ↓
+GitHub redirects back with auth code
+  ↓
+Supabase exchanges code for session
+  ↓
+Redirect to /projects
   ↓
 API routes verify auth with requireAuth()
   ↓
 RLS policies filter database queries by user_id
 ```
 
+### Why GitHub OAuth?
+
+1. **Repository Access**: Maestro orchestrates AI agents that build applications. These agents need to:
+   - Clone repositories
+   - Create branches
+   - Commit code
+   - Create pull requests
+   - Read repository structure
+
+2. **Identity**: GitHub provides reliable user identity with email verification built-in
+
+3. **Single Sign-On**: Users don't need to remember another password
+
+4. **Permissions**: OAuth scopes let users control what Maestro can access
+
 ### Security Layers
 
 1. **Middleware** (`middleware.ts`):
    - Redirects unauthenticated users to `/login`
-   - Redirects authenticated users away from auth pages
-   - Protects all routes except `/login` and `/signup`
+   - Redirects authenticated users away from login page
+   - Protects all routes except `/login`
 
 2. **API Route Protection** (`requireAuth()`):
    - All protected API routes call `requireAuth()`
@@ -160,14 +217,22 @@ RLS policies filter database queries by user_id
 
 ### Key Files
 
-- `app/login/page.tsx` - Login page
-- `app/signup/page.tsx` - Signup page
+- `app/login/page.tsx` - GitHub OAuth login page
 - `middleware.ts` - Route protection
 - `lib/auth-helpers.ts` - Authentication utility functions
 - `lib/supabase.ts` - Supabase client configuration
 - `components/LogoutButton.tsx` - Logout functionality
 - `supabase/add_user_id_migration.sql` - Database migration
 - `supabase/rls_policies.sql` - RLS policies
+
+## GitHub OAuth Scopes
+
+Maestro requests these GitHub permissions:
+- **Read user profile** - Get your name and email
+- **Access repositories** - Read and write to repos (required for agent operations)
+- **Create pull requests** - Agents can submit code changes
+
+You can revoke access anytime in GitHub Settings > Applications.
 
 ## API Route Protection Pattern
 
@@ -202,28 +267,20 @@ export async function GET() {
 }
 ```
 
-## Creating Records with user_id
-
-When creating new records, the `user_id` is automatically set by RLS policies. However, for clarity, you can explicitly set it:
-
-```typescript
-const userId = await requireAuth();
-
-const newProject = {
-  ...projectData,
-  user_id: userId, // Explicitly set (optional, RLS will handle it)
-};
-
-await createProject(newProject);
-```
-
 ## Troubleshooting
 
 ### "Unauthorized" error when accessing API routes
 
-- Verify you're logged in
+- Verify you're logged in with GitHub
 - Check browser console for authentication errors
 - Verify `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set correctly
+- Check that GitHub OAuth is enabled in Supabase
+
+### GitHub OAuth redirect fails
+
+- Verify callback URL in GitHub matches Supabase callback URL exactly
+- Check that Client ID and Client Secret are correct in Supabase
+- Ensure redirect URLs are configured in Supabase URL Configuration
 
 ### Can see other users' data
 
@@ -236,12 +293,39 @@ await createProject(newProject);
 - Verify the `user_id` column exists and allows NULL or has a default
 - Check RLS INSERT policies are created
 - Check browser console and API logs for errors
+- Verify you're logged in with GitHub
 
 ### Redirect loop between /login and /projects
 
 - Clear browser cookies
 - Verify Supabase URL and keys are correct
 - Check middleware.ts logic
+- Verify GitHub OAuth is properly configured
+
+## Production Deployment
+
+Before deploying to production:
+
+1. **Update GitHub OAuth App**:
+   - Add production callback URL: `https://your-domain.com`
+   - Update authorization callback URL
+
+2. **Update Supabase**:
+   - Add production URL to redirect URLs
+   - Update site URL to production domain
+
+3. **Environment Variables**:
+   - Set `NEXT_PUBLIC_SUPABASE_URL` in production
+   - Set `NEXT_PUBLIC_SUPABASE_ANON_KEY` in production
+
+4. **Test Authentication**:
+   - Test GitHub login flow on production
+   - Verify redirects work correctly
+   - Test data isolation
+
+5. **GitHub Permissions**:
+   - Review requested OAuth scopes
+   - Ensure only necessary permissions are requested
 
 ## Security Best Practices
 
@@ -250,37 +334,46 @@ await createProject(newProject);
 - Let RLS handle data filtering
 - Use server-side auth helpers (`getServerUserId()`)
 - Check authentication before any data operations
+- Review GitHub OAuth permissions regularly
 
 ❌ **DON'T:**
 - Trust client-provided `user_id`
 - Skip authentication checks in API routes
 - Disable RLS policies
 - Store sensitive data without encryption
+- Request more GitHub permissions than needed
 
-## Production Deployment
+## GitHub Token Management
 
-Before deploying to production:
+Supabase stores the GitHub access token securely. To access it in your code:
 
-1. Update Supabase redirect URLs to include production domain
-2. Verify all environment variables are set in production
-3. Test authentication flow on production
-4. Enable email confirmation (optional): **Authentication** > **Email Templates**
-5. Set up custom SMTP (optional): **Project Settings** > **SMTP Settings**
+```typescript
+const { data: { session } } = await supabase.auth.getSession();
+const githubToken = session?.provider_token; // Use for GitHub API calls
+```
+
+This token can be used to:
+- Make GitHub API requests on behalf of the user
+- Clone repositories
+- Create commits and pull requests
+- Read repository data
 
 ## Next Steps
 
-- ✅ Basic authentication is now set up
-- ⏭️ Add password reset functionality
-- ⏭️ Add email verification
-- ⏭️ Add social login providers (Google, GitHub, etc.)
+- ✅ GitHub OAuth authentication is set up
+- ⏭️ Implement GitHub repository integration
+- ⏭️ Add agent GitHub operations (clone, commit, PR)
 - ⏭️ Update remaining API routes with `requireAuth()`
-- ⏭️ Add user profile management
+- ⏭️ Add user profile management with GitHub data
+- ⏭️ Implement repository selection UI
 
 ## Support
 
 If you encounter issues:
 1. Check this guide thoroughly
-2. Verify all migrations have been run
-3. Check Supabase dashboard for authentication logs
-4. Review browser console for errors
-5. Check Next.js server logs
+2. Verify GitHub OAuth app is configured correctly
+3. Verify all migrations have been run
+4. Check Supabase dashboard for authentication logs
+5. Review browser console for errors
+6. Check Next.js server logs
+7. Verify GitHub OAuth callback URL matches exactly
