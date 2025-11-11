@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Github, AlertCircle } from 'lucide-react';
@@ -12,23 +12,28 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     // Check for OAuth errors in URL
     const errorParam = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+
     if (errorParam) {
+      console.error('[Login] OAuth error:', errorParam, errorDescription);
+
       switch (errorParam) {
         case 'auth_failed':
           setError('GitHub authentication failed. Please try again.');
           break;
         case 'no_code':
-          setError('No authorization code received. Please try again.');
+          setError('No authorization code received from GitHub. Please check your GitHub OAuth app configuration.');
           break;
         case 'unexpected_error':
-          setError('An unexpected error occurred. Please try again.');
+          setError(errorDescription || 'An unexpected error occurred. Please try again.');
           break;
         default:
-          setError('Authentication error. Please try again.');
+          setError(errorDescription || 'Authentication error. Please try again.');
       }
       // Remove error from URL
       router.replace('/login');
@@ -40,10 +45,14 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      // Use production URL from environment variable, fallback to current origin for local dev
+      console.log('[Login] Starting GitHub OAuth flow...');
+
+      // Use production URL from environment variable, fallback to current origin
       const redirectUrl = process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
         : `${window.location.origin}/auth/callback`;
+
+      console.log('[Login] Redirect URL:', redirectUrl);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
@@ -53,13 +62,16 @@ function LoginForm() {
       });
 
       if (error) {
+        console.error('[Login] OAuth error:', error);
         setError(error.message);
         setIsLoading(false);
         return;
       }
 
-      // OAuth will redirect, so we don't need to manually navigate
+      console.log('[Login] OAuth initiated successfully, redirecting to GitHub...');
+      // OAuth will redirect to GitHub, so we don't need to manually navigate
     } catch (err) {
+      console.error('[Login] Unexpected error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred during login');
       setIsLoading(false);
     }
