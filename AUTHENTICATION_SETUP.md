@@ -1,286 +1,276 @@
-# Maestro Authentication Setup Guide
+# Maestro GitHub OAuth Setup - Production Guide
 
-This guide walks you through setting up Supabase authentication with Row Level Security (RLS) for the Maestro application.
+## ⚡ Quick Start
+
+**Having trouble logging in?** Visit: `/auth/diagnostics` on your deployed app for a complete configuration checker.
+
+---
 
 ## Overview
 
-Maestro now uses Supabase Authentication to ensure:
-- ✅ Users must log in to access the application
-- ✅ Each user only sees their own projects, tasks, agents, and improvements
-- ✅ Row Level Security (RLS) enforces data isolation at the database level
-- ✅ API routes are protected with authentication checks
+Maestro uses **GitHub OAuth ONLY** for authentication because:
+- ✅ GitHub integration is required (Maestro builds apps from repos)
+- ✅ Single sign-on - no passwords to manage
+- ✅ Secure OAuth 2.0 protocol
+- ✅ Each user only sees their own data (Row Level Security)
 
 ## Prerequisites
 
 - Supabase project with database configured
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` environment variables set
+- Vercel account with Maestro deployed
+- GitHub account
+
+---
 
 ## Setup Steps
 
-### Step 1: Enable Supabase Authentication
+### Step 1: Set Vercel Environment Variables
 
-1. Go to your Supabase dashboard: https://app.supabase.com
-2. Select your project
-3. Navigate to **Authentication** > **Providers**
-4. Enable **Email** provider (enabled by default)
-5. Configure redirect URLs:
-   - Go to **Authentication** > **URL Configuration**
-   - Add your site URL (e.g., `http://localhost:3000` for development)
-   - Add redirect URLs: `http://localhost:3000/login`, `http://localhost:3000/projects`
+**Go to:** Vercel Dashboard → maestro-dusky → Settings → Environment Variables
 
-### Step 2: Run Database Migrations
+**Add these 3 variables:**
 
-#### 2a. Add user_id columns
+| Variable Name | Where to Get It | Example |
+|--------------|-----------------|---------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Settings → API → Project URL | `https://xxxxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API → anon/public key | `eyJhbGciOi...` (long JWT) |
+| `NEXT_PUBLIC_APP_URL` | Your Vercel production URL | `https://maestro-dusky.vercel.app` |
 
-1. Open Supabase SQL Editor: **SQL Editor** > **New Query**
+**Important:**
+- Set for **Production** environment
+- **After adding variables, you MUST redeploy!**
+
+---
+
+### Step 2: Get Supabase Callback URL
+
+1. Go to: https://app.supabase.com
+2. Select your Maestro project
+3. Navigate to: **Authentication** → **Providers**
+4. Click **GitHub** in the provider list
+5. **Copy the Callback URL** shown at the top
+   - Looks like: `https://xxxxxxxxx.supabase.co/auth/v1/callback`
+   - **YOU WILL NEED THIS FOR GITHUB**
+
+---
+
+### Step 3: Create GitHub OAuth App
+
+1. Go to: https://github.com/settings/developers
+2. Click **OAuth Apps**
+3. Click **New OAuth App** (or edit existing)
+4. Fill in:
+   - **Application name:** `Maestro` (or whatever you prefer)
+   - **Homepage URL:** `https://maestro-dusky.vercel.app`
+   - **Authorization callback URL:** **PASTE SUPABASE CALLBACK URL FROM STEP 2**
+     - Example: `https://xxxxxxxxx.supabase.co/auth/v1/callback`
+     - ⚠️ **NOT** `https://maestro-dusky.vercel.app/auth/callback`
+     - ⚠️ **NOT** anything with localhost
+5. Click **Register application**
+6. **Copy the Client ID** (you'll need it for Supabase)
+7. Click **Generate a new client secret** and **copy it** (you'll need it for Supabase)
+
+**CRITICAL:** The callback URL must be your Supabase URL, not your app's URL!
+
+---
+
+### Step 4: Configure Supabase GitHub Provider
+
+1. Go to: https://app.supabase.com
+2. Select your Maestro project
+3. Navigate to: **Authentication** → **Providers**
+4. Click **GitHub**
+5. Toggle **Enable Sign in with GitHub** to **ON**
+6. Enter credentials from GitHub:
+   - **Client ID:** Paste from GitHub OAuth app
+   - **Client Secret:** Paste from GitHub OAuth app
+7. Scroll to bottom and click **Save**
+
+---
+
+### Step 5: Configure Supabase Redirect URLs
+
+1. Still in Supabase Dashboard
+2. Navigate to: **Authentication** → **URL Configuration**
+3. Set these values:
+   - **Site URL:** `https://maestro-dusky.vercel.app`
+   - **Redirect URLs:** Add these (one per line):
+     ```
+     https://maestro-dusky.vercel.app/auth/callback
+     https://maestro-dusky.vercel.app/**
+     ```
+4. Click **Save**
+
+---
+
+### Step 6: Run Database Migrations
+
+#### Add user_id columns
+
+1. Open Supabase SQL Editor: **SQL Editor** → **New Query**
 2. Copy and paste the contents of `supabase/add_user_id_migration.sql`
-3. Click **Run** to execute
+3. Click **Run**
 
-This migration adds `user_id` columns to all tables and creates indexes for efficient queries.
+This adds `user_id` columns to all tables for multi-tenant data isolation.
 
-#### 2b. Clean up existing data (if any)
+#### Enable Row Level Security
 
-If you have existing test data without user IDs, you have two options:
-
-**Option A: Delete test data**
-```sql
-DELETE FROM projects WHERE user_id IS NULL;
-DELETE FROM tasks WHERE user_id IS NULL;
-DELETE FROM agents WHERE user_id IS NULL;
-DELETE FROM improvements WHERE user_id IS NULL;
-```
-
-**Option B: Assign to your user** (after creating an account)
-```sql
--- First, sign up through the app to get your user_id
--- Then run this query, replacing 'your-user-id' with your actual user ID
-UPDATE projects SET user_id = 'your-user-id' WHERE user_id IS NULL;
-UPDATE tasks SET user_id = 'your-user-id' WHERE user_id IS NULL;
-UPDATE agents SET user_id = 'your-user-id' WHERE user_id IS NULL;
-UPDATE improvements SET user_id = 'your-user-id' WHERE user_id IS NULL;
-```
-
-### Step 3: Enable Row Level Security (RLS)
-
-1. Open Supabase SQL Editor
+1. Still in SQL Editor, open a new query
 2. Copy and paste the contents of `supabase/rls_policies.sql`
-3. Click **Run** to execute
+3. Click **Run**
 
-This creates RLS policies that ensure:
-- Users can only view their own data
-- Users can only create/update/delete their own data
-- All operations are filtered by the authenticated user's ID
+This ensures users can only see their own data.
 
-### Step 4: Verify RLS is Working
+---
 
-Run this query to see all active RLS policies:
+### Step 7: Redeploy Vercel
 
-```sql
-SELECT tablename, policyname, permissive, roles, cmd
-FROM pg_policies
-WHERE schemaname = 'public'
-ORDER BY tablename, policyname;
-```
+**CRITICAL:** Environment variable changes require a redeploy!
 
-You should see policies for:
-- projects (SELECT, INSERT, UPDATE, DELETE)
-- tasks (SELECT, INSERT, UPDATE, DELETE)
-- agents (SELECT, INSERT, UPDATE, DELETE)
-- improvements (SELECT, INSERT, UPDATE, DELETE)
-- cost_records (SELECT, INSERT)
-- events (SELECT, INSERT)
+1. Go to: Vercel Dashboard → Deployments
+2. Click **⋮** (three dots) on the latest deployment
+3. Click **Redeploy**
+4. Wait ~2 minutes for deployment to complete
 
-### Step 5: Test Authentication Flow
+---
 
-1. Start the development server:
-   ```bash
-   npm run dev
-   ```
+### Step 8: Test the Login Flow
 
-2. Visit http://localhost:3000
-   - Should automatically redirect to `/login`
+1. **Clear browser cache and cookies** for `maestro-dusky.vercel.app`
+2. **Open Browser DevTools** (F12) → Console tab
+3. Visit: `https://maestro-dusky.vercel.app/login`
+4. **Watch console for logs:**
+   - `[Login] Creating Supabase client...`
+   - `[Login] LoginForm mounted`
+5. Click **"Sign in with GitHub"**
+6. **Watch console:**
+   - `[Login] Starting GitHub OAuth flow...`
+   - `[Login] Redirect URL: ...`
+   - `[Login] OAuth initiated successfully...`
+7. You'll be redirected to GitHub
+8. Click **Authorize**
+9. GitHub redirects to Supabase
+10. Supabase redirects to your app at `/auth/callback`
+11. **Watch console:**
+    - `[OAuth Callback] Received callback`
+    - `[OAuth Callback] Exchanging code for session...`
+    - `[OAuth Callback] Session established successfully for user: ...`
+12. You should land on `/projects` logged in!
 
-3. Click "Sign up" and create an account
-   - Use a valid email address
-   - Password must be at least 6 characters
-   - Should redirect to `/projects` after signup
-
-4. Create a project
-   - Click "Create Project"
-   - Fill in name and description
-   - Project should appear in the list immediately
-
-5. Test data isolation:
-   - Open an incognito/private browser window
-   - Sign up with a different email
-   - Verify you cannot see the first user's projects
-   - Create a project as the second user
-   - Verify the second user only sees their own project
-
-6. Test logout:
-   - Click "Logout" in the navigation
-   - Should redirect to `/login`
-   - Verify you cannot access `/projects` without logging in
-
-## Architecture
-
-### Authentication Flow
-
-```
-User visits any protected route
-  ↓
-Middleware checks authentication
-  ↓
-Not authenticated → Redirect to /login
-  ↓
-Authenticated → Allow access
-  ↓
-API routes verify auth with requireAuth()
-  ↓
-RLS policies filter database queries by user_id
-```
-
-### Security Layers
-
-1. **Middleware** (`middleware.ts`):
-   - Redirects unauthenticated users to `/login`
-   - Redirects authenticated users away from auth pages
-   - Protects all routes except `/login` and `/signup`
-
-2. **API Route Protection** (`requireAuth()`):
-   - All protected API routes call `requireAuth()`
-   - Returns `401 Unauthorized` if not authenticated
-   - Never trusts client-provided user_id
-
-3. **Row Level Security (RLS)**:
-   - Database-level security
-   - Automatically filters queries by `auth.uid()`
-   - Prevents users from accessing other users' data
-   - Works even if API protection is bypassed
-
-### Key Files
-
-- `app/login/page.tsx` - Login page
-- `app/signup/page.tsx` - Signup page
-- `middleware.ts` - Route protection
-- `lib/auth-helpers.ts` - Authentication utility functions
-- `lib/supabase.ts` - Supabase client configuration
-- `components/LogoutButton.tsx` - Logout functionality
-- `supabase/add_user_id_migration.sql` - Database migration
-- `supabase/rls_policies.sql` - RLS policies
-
-## API Route Protection Pattern
-
-All protected API routes follow this pattern:
-
-```typescript
-import { requireAuth } from '@/lib/auth-helpers';
-
-export async function GET() {
-  try {
-    // Verify user is authenticated (throws if not)
-    await requireAuth();
-
-    // Your API logic here
-    // RLS will automatically filter by user_id
-    const data = await getData();
-
-    return NextResponse.json(data);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Internal error' },
-      { status: 500 }
-    );
-  }
-}
-```
-
-## Creating Records with user_id
-
-When creating new records, the `user_id` is automatically set by RLS policies. However, for clarity, you can explicitly set it:
-
-```typescript
-const userId = await requireAuth();
-
-const newProject = {
-  ...projectData,
-  user_id: userId, // Explicitly set (optional, RLS will handle it)
-};
-
-await createProject(newProject);
-```
+---
 
 ## Troubleshooting
 
-### "Unauthorized" error when accessing API routes
+### "No authorization code received"
 
-- Verify you're logged in
-- Check browser console for authentication errors
-- Verify `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set correctly
+**Cause:** GitHub OAuth callback URL is incorrect.
 
-### Can see other users' data
+**Solution:**
+1. Go to GitHub OAuth app settings
+2. Verify **Authorization callback URL** is your **Supabase callback URL**
+   - Should be: `https://xxxxx.supabase.co/auth/v1/callback`
+   - Should NOT be: `https://maestro-dusky.vercel.app/...`
+3. Make sure you copied it exactly from Supabase → Authentication → Providers → GitHub
 
-- Verify RLS policies are enabled: `SELECT * FROM pg_policies WHERE schemaname = 'public';`
-- Check that `user_id` column exists in all tables
-- Verify RLS is enabled on tables: `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public';`
+### Page stuck on "Loading..."
 
-### Cannot create projects/tasks
+**Cause:** Missing or invalid Vercel environment variables.
 
-- Verify the `user_id` column exists and allows NULL or has a default
-- Check RLS INSERT policies are created
-- Check browser console and API logs for errors
+**Solution:**
+1. Check Vercel → Settings → Environment Variables
+2. Verify all 3 variables are set for **Production**
+3. Make sure values don't have extra spaces or quotes
+4. Redeploy after setting variables
 
-### Redirect loop between /login and /projects
+### Configuration Error page
 
-- Clear browser cookies
-- Verify Supabase URL and keys are correct
-- Check middleware.ts logic
+**Cause:** Environment variables not available at runtime.
 
-## Security Best Practices
+**Solution:**
+1. Verify variables are set in Vercel for **Production** environment
+2. Variable names must start with `NEXT_PUBLIC_`
+3. Redeploy Vercel after setting variables
 
-✅ **DO:**
-- Always use `requireAuth()` in API routes
-- Let RLS handle data filtering
-- Use server-side auth helpers (`getServerUserId()`)
-- Check authentication before any data operations
+### GitHub authorization fails
 
-❌ **DON'T:**
-- Trust client-provided `user_id`
-- Skip authentication checks in API routes
-- Disable RLS policies
-- Store sensitive data without encryption
+**Cause:** Client ID/Secret mismatch between GitHub and Supabase.
 
-## Production Deployment
+**Solution:**
+1. Get fresh Client ID and Secret from GitHub OAuth app
+2. Copy-paste them exactly into Supabase GitHub provider
+3. Don't include extra spaces or quotes
+4. Click Save in Supabase
 
-Before deploying to production:
+---
 
-1. Update Supabase redirect URLs to include production domain
-2. Verify all environment variables are set in production
-3. Test authentication flow on production
-4. Enable email confirmation (optional): **Authentication** > **Email Templates**
-5. Set up custom SMTP (optional): **Project Settings** > **SMTP Settings**
+## Diagnostic Tool
 
-## Next Steps
+Visit `/auth/diagnostics` on your deployed app for a complete configuration checker that shows:
+- ✅ Which environment variables are set
+- ✅ Exact values to use in GitHub OAuth app
+- ✅ Step-by-step Supabase configuration
+- ✅ OAuth flow explanation
+- ✅ Common errors and solutions
 
-- ✅ Basic authentication is now set up
-- ⏭️ Add password reset functionality
-- ⏭️ Add email verification
-- ⏭️ Add social login providers (Google, GitHub, etc.)
-- ⏭️ Update remaining API routes with `requireAuth()`
-- ⏭️ Add user profile management
+---
+
+## OAuth Flow Diagram
+
+```
+User clicks "Sign in with GitHub" on Maestro
+  ↓
+Redirects to GitHub authorization page
+  ↓
+User clicks "Authorize" on GitHub
+  ↓
+GitHub redirects to SUPABASE callback URL
+  ↓
+Supabase exchanges auth code for session
+  ↓
+Supabase redirects to YOUR APP at /auth/callback
+  ↓
+Your app sets session cookies
+  ↓
+Redirects to /projects (user is logged in!)
+```
+
+**Key Point:** GitHub sends the auth code to Supabase, not directly to your app. This is why the GitHub callback URL must be Supabase's URL.
+
+---
+
+## Security
+
+- ✅ Middleware protects all routes except `/login` and `/auth/callback`
+- ✅ API routes verify authentication with `requireAuth()`
+- ✅ Row Level Security (RLS) filters all database queries by user ID
+- ✅ Users can only see/modify their own data
+
+---
+
+## Common Mistakes
+
+❌ **Wrong:** GitHub callback URL = `https://maestro-dusky.vercel.app/auth/callback`
+✅ **Correct:** GitHub callback URL = `https://xxxxx.supabase.co/auth/v1/callback`
+
+❌ **Wrong:** Using localhost URLs in production
+✅ **Correct:** Using `https://maestro-dusky.vercel.app` everywhere
+
+❌ **Wrong:** Forgetting to redeploy after setting env vars
+✅ **Correct:** Always redeploy Vercel after changing environment variables
+
+❌ **Wrong:** Client ID/Secret don't match between GitHub and Supabase
+✅ **Correct:** Copy-paste exactly from GitHub to Supabase
+
+---
 
 ## Support
 
-If you encounter issues:
-1. Check this guide thoroughly
-2. Verify all migrations have been run
-3. Check Supabase dashboard for authentication logs
-4. Review browser console for errors
-5. Check Next.js server logs
+If you still can't login after following this guide:
+
+1. Visit `/auth/diagnostics` on your deployed app
+2. Open browser DevTools → Console
+3. Try to login and copy ALL console messages
+4. Check what the diagnostics page shows is missing
+5. Share console messages and diagnostics output for debugging
+
+The console logs and diagnostics will show exactly where the OAuth flow is breaking.
