@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Github, AlertCircle } from 'lucide-react';
@@ -12,23 +12,46 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [supabase] = useState(() => {
+    try {
+      // Check if environment variables are set
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        console.error('[Login] Missing Supabase environment variables!', {
+          hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        });
+        throw new Error('Supabase not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
+      }
+      console.log('[Login] Creating Supabase client...');
+      return createClient();
+    } catch (err) {
+      console.error('[Login] Failed to create Supabase client:', err);
+      throw err;
+    }
+  });
 
   useEffect(() => {
+    console.log('[Login] LoginForm mounted');
+
     // Check for OAuth errors in URL
     const errorParam = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+
     if (errorParam) {
+      console.error('[Login] OAuth error:', errorParam, errorDescription);
+
       switch (errorParam) {
         case 'auth_failed':
           setError('GitHub authentication failed. Please try again.');
           break;
         case 'no_code':
-          setError('No authorization code received. Please try again.');
+          setError('No authorization code received from GitHub. Please check your GitHub OAuth app configuration.');
           break;
         case 'unexpected_error':
-          setError('An unexpected error occurred. Please try again.');
+          setError(errorDescription || 'An unexpected error occurred. Please try again.');
           break;
         default:
-          setError('Authentication error. Please try again.');
+          setError(errorDescription || 'Authentication error. Please try again.');
       }
       // Remove error from URL
       router.replace('/login');
@@ -40,10 +63,14 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      // Use production URL from environment variable, fallback to current origin for local dev
+      console.log('[Login] Starting GitHub OAuth flow...');
+
+      // Use production URL from environment variable, fallback to current origin
       const redirectUrl = process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
         : `${window.location.origin}/auth/callback`;
+
+      console.log('[Login] Redirect URL:', redirectUrl);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
@@ -53,13 +80,16 @@ function LoginForm() {
       });
 
       if (error) {
+        console.error('[Login] OAuth error:', error);
         setError(error.message);
         setIsLoading(false);
         return;
       }
 
-      // OAuth will redirect, so we don't need to manually navigate
+      console.log('[Login] OAuth initiated successfully, redirecting to GitHub...');
+      // OAuth will redirect to GitHub, so we don't need to manually navigate
     } catch (err) {
+      console.error('[Login] Unexpected error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred during login');
       setIsLoading(false);
     }
@@ -114,14 +144,65 @@ function LoginForm() {
   );
 }
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[Login] Error boundary caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md p-8">
+            <div className="text-center mb-8">
+              <div className="text-3xl font-bold text-red-400 mb-4">⚠️</div>
+              <h1 className="text-2xl font-bold text-slate-50 mb-2">Configuration Error</h1>
+              <p className="text-slate-400 text-sm mb-4">
+                {this.state.error?.message || 'Failed to initialize login page'}
+              </p>
+            </div>
+            <div className="bg-slate-800 p-4 rounded-lg text-xs text-slate-300 space-y-2">
+              <p className="font-bold">Required Vercel Environment Variables:</p>
+              <ul className="list-disc list-inside space-y-1 text-slate-400">
+                <li>NEXT_PUBLIC_SUPABASE_URL</li>
+                <li>NEXT_PUBLIC_SUPABASE_ANON_KEY</li>
+                <li>NEXT_PUBLIC_APP_URL</li>
+              </ul>
+              <p className="mt-4 text-slate-500">
+                Set these in Vercel → Settings → Environment Variables, then redeploy.
+              </p>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-slate-400">Loading...</div>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+          <div className="text-slate-400">Loading...</div>
+        </div>
+      }>
+        <LoginForm />
+      </Suspense>
+    </ErrorBoundary>
   );
 }

@@ -14,7 +14,25 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const error = requestUrl.searchParams.get('error');
+  const errorDescription = requestUrl.searchParams.get('error_description');
   const next = requestUrl.searchParams.get('next') || '/projects';
+
+  console.log('[OAuth Callback] Received callback:', {
+    hasCode: !!code,
+    hasError: !!error,
+    errorDescription,
+    origin: requestUrl.origin
+  });
+
+  // Check if GitHub returned an error
+  if (error) {
+    console.error('[OAuth Callback] GitHub OAuth error:', error, errorDescription);
+    const encodedDescription = encodeURIComponent(errorDescription || error);
+    return NextResponse.redirect(
+      `${requestUrl.origin}/login?error=${error}&error_description=${encodedDescription}`
+    );
+  }
 
   if (code) {
     const cookieStore = cookies();
@@ -49,21 +67,33 @@ export async function GET(request: NextRequest) {
     );
 
     try {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      console.log('[OAuth Callback] Exchanging code for session...');
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-      if (error) {
-        console.error('[OAuth Callback] Error exchanging code for session:', error);
-        return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_failed`);
+      if (exchangeError) {
+        console.error('[OAuth Callback] Error exchanging code for session:', exchangeError);
+        const encodedError = encodeURIComponent(exchangeError.message);
+        return NextResponse.redirect(
+          `${requestUrl.origin}/login?error=auth_failed&error_description=${encodedError}`
+        );
       }
 
+      console.log('[OAuth Callback] Session established successfully for user:', data.user?.email);
       // Successful authentication - redirect to the app
       return NextResponse.redirect(`${requestUrl.origin}${next}`);
-    } catch (error) {
-      console.error('[OAuth Callback] Unexpected error:', error);
-      return NextResponse.redirect(`${requestUrl.origin}/login?error=unexpected_error`);
+    } catch (err) {
+      console.error('[OAuth Callback] Unexpected error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const encodedError = encodeURIComponent(errorMsg);
+      return NextResponse.redirect(
+        `${requestUrl.origin}/login?error=unexpected_error&error_description=${encodedError}`
+      );
     }
   }
 
   // No code parameter - redirect to login
-  return NextResponse.redirect(`${requestUrl.origin}/login?error=no_code`);
+  console.error('[OAuth Callback] No authorization code received from GitHub');
+  return NextResponse.redirect(
+    `${requestUrl.origin}/login?error=no_code&error_description=No authorization code received from GitHub. Please check your GitHub OAuth app settings.`
+  );
 }
